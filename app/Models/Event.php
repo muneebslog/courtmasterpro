@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Event extends Model
@@ -10,8 +11,8 @@ class Event extends Model
     protected $fillable = [
         'tournament_id',
         'name',
-        'type',
-        'default_discipline',
+        'type', //individual or team
+        'default_discipline', //e.g., singles, doubles , mixed
         'best_of_sets',
         'status',
     ];
@@ -23,5 +24,15 @@ class Event extends Model
     public function tournament(): BelongsTo
     {
         return $this->belongsTo(Tournament::class);
+    }
+
+     public function teams(): HasMany
+    {
+        return $this->hasMany(Team::class);
+    }
+
+    public function rounds(): HasMany
+    {
+        return $this->hasMany(Round::class);
     }
 }

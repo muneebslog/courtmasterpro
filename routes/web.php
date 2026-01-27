@@ -12,4 +12,13 @@ Route::view('dashboard', 'dashboard')
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
+Route::livewire('/tournaments/{tournament}', 'pages::tournaments.show')
+    ->middleware(['auth', 'verified'])
+    ->name('tournaments.show');
+
+// define the event.show model route
+Route::livewire('/events/{event}', 'pages::events.show')
+    ->middleware(['auth', 'verified'])
+    ->name('events.show');
+
 require __DIR__.'/settings.php';
