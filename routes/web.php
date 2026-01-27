@@ -20,5 +20,9 @@ Route::livewire('/tournaments/{tournament}', 'pages::tournaments.show')
 Route::livewire('/events/{event}', 'pages::events.show')
     ->middleware(['auth', 'verified'])
     ->name('events.show');
+    // matches.show
+Route::livewire('/matches/{match}', 'pages::matches.show')
+    ->middleware(['auth', 'verified'])
+    ->name('matches.show');
 
 require __DIR__.'/settings.php';

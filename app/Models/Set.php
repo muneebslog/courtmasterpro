@@ -28,4 +28,9 @@ class Set extends Model
     {
         return $this->belongsTo(Team::class, 'winner_team_id');
     }
+    // Add relation to scores
+    public function scores(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SetScore::class, 'set_id');
+    }
 }

@@ -11,6 +11,7 @@ class MatchGame extends Model
 
     protected $fillable = [
         'round_id',
+        'match_no',
         'team_a_id',
         'team_b_id',
         'court_no',
@@ -45,5 +46,11 @@ class MatchGame extends Model
     public function winner(): BelongsTo
     {
         return $this->belongsTo(Team::class, 'winner_team_id');
+    }
+
+    // Add relation to sets
+    public function sets(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Set::class, 'match_id');
     }
 }

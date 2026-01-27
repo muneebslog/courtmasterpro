@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('matches', function (Blueprint $table) {
             $table->id();
             $table->foreignId('round_id')->constrained('rounds')->onDelete('cascade');
+            $table->unsignedInteger('match_no')->nullable();
             $table->foreignId('team_a_id')->nullable()->constrained('teams')->onDelete('cascade');
             $table->foreignId('team_b_id')->nullable()->constrained('teams')->onDelete('cascade');
             $table->string('court_no')->nullable();

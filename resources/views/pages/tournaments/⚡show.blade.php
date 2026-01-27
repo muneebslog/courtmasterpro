@@ -230,7 +230,7 @@ new class extends Component {
 
                             {{-- Action --}}
                             <div class="px-6 pb-6">
-                                <a href="{{ route('events.show', $event) }}"
+                                <a href="{{ route('events.show', $event) }}" wire:navigate
                                     class="block w-full text-center py-2 bg-gray-50 hover:bg-blue-600 hover:text-white text-gray-700 rounded-lg text-sm font-medium border border-gray-100 transition-all">
                                     View Event
                                 </a>
