@@ -136,12 +136,17 @@ new class extends Component {
             return;
         }
 
-        $this->log(
-            $this->resolveActionType(),
-            $this->actionTeamId,
-            ucfirst(str_replace('_', ' ', $this->resolveActionType())),
-            $this->actionPlayerId
-        );
+        if ($this->actionCategory === 'walkover') {
+
+            $result = app(MatchService::class)
+                ->handleWalkover($this->match, $this->set, $this->actionTeamId);
+
+            $this->matchWinnerTeamId = $result['match_winner_team_id'];
+            $this->showMatchWinnerScreen = true;
+
+            return;
+        }
+
 
         // Reset only what makes sense
         $this->cardType = null;
@@ -269,6 +274,11 @@ new class extends Component {
 
     public function confirmStartNextSet()
     {
+        $maxSets = $this->match->round->event->best_of_sets;
+        if ($this->set->set_number >= $maxSets) {
+            return; // or throw an exception
+        }
+
         $this->set = $this->match->sets()->create([
             'set_number' => $this->set->set_number + 1,
             'discipline' => $this->set->discipline,
@@ -342,20 +352,20 @@ new class extends Component {
                     @if ($match->status === 'live')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                            bg-green-100 text-green-700 border border-green-200">
+                                                                                                                                                                                                bg-green-100 text-green-700 border border-green-200">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
                             LIVE
                         </span>
                     @elseif ($match->status === 'completed')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                            bg-slate-100 text-slate-700 border border-slate-200">
+                                                                                                                                                                                                bg-slate-100 text-slate-700 border border-slate-200">
                             COMPLETED
                         </span>
                     @else
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                            bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                                                                                                                                                                                bg-yellow-100 text-yellow-700 border border-yellow-200">
                             NOT STARTED
                         </span>
                     @endif
@@ -502,8 +512,8 @@ new class extends Component {
 
                                     <flux:select label='Player (optional)' wire:model="actionPlayerId"
                                         class="w-full rounded-lg border-slate-300 text-sm
-                                                                                                        focus:ring-blue-500 focus:border-blue-500
-                                                                                                        disabled:bg-slate-100" :disabled="!$actionTeamId">
+                                                                                                            focus:ring-blue-500 focus:border-blue-500
+                                                                                                            disabled:bg-slate-100" :disabled="!$actionTeamId">
                                         <flux:select.option value="">
                                             — Team Level Action —
                                         </flux:select.option>
@@ -681,7 +691,7 @@ new class extends Component {
 
                 {{-- Winner --}}
                 <p class="text-xl">
-                   👑  Winner:
+                    👑 Winner:
                     <strong>
                         {{ $matchWinnerTeamId === $match->team_a_id
             ? $match->teamA->display_name
@@ -727,7 +737,7 @@ new class extends Component {
                 <flux:button variant="primary" href="{{ route('events.show', $match->round->event->id) }}" class="w-full">
                     Go to Dashboard
                 </flux:button>
-                  {{-- Action --}}
+                {{-- Action --}}
                 <flux:button href="{{ route('matches.show', $match->id) }}" class="w-full">
                     See Event Details
                 </flux:button>

@@ -40,11 +40,13 @@ class MatchService
             'occurred_at' => now(),
         ]);
 
+        // Refresh sets relationship to include the updated winner_team_id
+        $match->load('sets');
+
         // 5️⃣ Check if this set win finishes the match
         if ($match->hasWinner()) {
 
             $matchWinnerId = $match->determineWinner();
-
             // 6️⃣ Mark match as completed
             $match->update([
                 'status' => 'completed',
@@ -72,6 +74,54 @@ class MatchService
         return [
             'type' => 'set_completed',
             'set_winner_team_id' => $setWinnerId,
+        ];
+    }
+
+    public function handleWalkover(MatchGame $match, Set $set, int $walkoverTeamId): array
+    {
+        // Determine winner
+        $winnerTeamId = $walkoverTeamId === $match->team_a_id
+            ? $match->team_b_id
+            : $match->team_a_id;
+
+        // Close current set if still live
+        if ($set->status === 'live') {
+            $set->update([
+                'status' => 'completed',
+                'winner_team_id' => $winnerTeamId,
+            ]);
+        }
+
+        // End match
+        $match->update([
+            'status' => 'completed',
+            'winner_team_id' => $winnerTeamId,
+            'ended_at' => now(),
+        ]);
+
+        // Log walkover
+        MatchEvent::create([
+            'match_id' => $match->id,
+            'set_id' => $set->id,
+            'team_id' => $walkoverTeamId,
+            'type' => 'walkover',
+            'description' => 'Walkover declared',
+            'occurred_at' => now(),
+        ]);
+
+        // Log match end
+        MatchEvent::create([
+            'match_id' => $match->id,
+            'team_id' => $winnerTeamId,
+            'type' => 'match_ended',
+            'description' => 'Match ended by walkover',
+            'occurred_at' => now(),
+        ]);
+
+        return [
+            'type' => 'match_completed',
+            'match_winner_team_id' => $winnerTeamId,
+            'reason' => 'walkover',
         ];
     }
 }

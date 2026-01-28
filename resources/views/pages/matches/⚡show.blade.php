@@ -196,9 +196,15 @@ new class extends Component {
                     </div>
                     <div class="p-8 pr-2 pt-0 -mt-3 w-full flex justify-end items-baseline">
                         <div class="">
-                            <flux:button variant="primary" size="sm" color="blue" icon="arrow-down-tray">
-                                Download Match Report
+                            <flux:button href="{{ route('matches.report.full', $match->id) }}" icon="document-text">
+                                Full Report
                             </flux:button>
+
+                            <flux:button href="{{ route('matches.report.summary', $match->id) }}"
+                                icon="clipboard-document">
+                                One-Page Summary
+                            </flux:button>
+
                         </div>
                     </div>
                 </section>
@@ -215,12 +221,18 @@ new class extends Component {
                                 {{ $teamBWins }}
                             </span>
                         </div>
-                        <p class="mt-4 text-lg font-semibold">
-                            Winner:
-                            <span class="text-green-600">
-                                {{ $winnerTeamId === $match->team_a_id ? $match->teamA->display_name : $match->teamB->display_name }}
-                            </span>
-                        </p>
+                        @if ($winnerTeamId)
+                            <p class="mt-4 text-lg font-semibold">
+                                Winner:
+                                <span class="text-green-600">
+                                    {{ $winnerTeamId === $match->team_a_id ? $match->teamA->display_name : $match->teamB->display_name }}
+                                </span>
+                            </p>
+                        @else
+                            <p class="mt-4 text-lg font-semibold text-yellow-600">
+                                Winner: TBD
+                            </p>
+                        @endif
 
                     </div>
                     <div class="max-w-md mx-auto space-y-3">
@@ -233,10 +245,10 @@ new class extends Component {
 
                                             <div
                                                 class="flex justify-between items-center p-3
-                                                                                                                                                                                                                                                        {{ $winner === 'A'
+                                                                                                                                                                                                                                                                                                {{ $winner === 'A'
                             ? 'bg-green-50 border-green-100'
                             : 'bg-gray-50 border-gray-100' }}
-                                                                                                                                                                                                                                                        rounded-lg border">
+                                                                                                                                                                                                                                                                                                rounded-lg border">
 
                                                 <span class="text-sm font-bold">
                                                     Set {{ $set->set_number }}
@@ -270,14 +282,14 @@ new class extends Component {
                                                                 <div class="flex gap-6 items-start">
                                                                     <div
                                                                         class="w-6 h-6 rounded-full
-                                                                                                                                                                                                                                                                                                                                                                        {{ match ($event->type) {
+                                                                                                                                                                                                                                                                                                                                                                                                                                        {{ match ($event->type) {
                                         'match_started' => 'bg-blue-600 ring-4 ring-blue-50',
                                         'match_ended' => 'bg-green-600 ring-4 ring-green-50',
                                         'yellow_card' => 'bg-yellow-400',
                                         'red_card' => 'bg-red-600',
                                         default => 'bg-gray-300'
                                     } }}
-                                                                                                                                                                                                                                                                                                                                                                        z-10">
+                                                                                                                                                                                                                                                                                                                                                                                                                                        z-10">
                                                                     </div>
 
                                                                     <div>
