@@ -29,8 +29,16 @@ new class extends Component {
 
     public function with(): array
     {
-        $project = Project::first(); // Get the first project for now
-        $this->project_id = $project ? $project->id : null;
+        $project = auth()->user()->ownedProject
+            ?? auth()->user()->projects()
+                ->wherePivot('is_active', true)
+                ->first();
+
+        $this->project_id = $project?->id;
+
+        if (!$this->project_id) {
+            abort(403, 'No project access assigned.');
+        }
 
 
         return [
@@ -47,8 +55,17 @@ new class extends Component {
         ];
     }
 
+    public function canManageTournament(): bool
+    {
+        $user = auth()->user();
+
+        return $user->isProjectOwner() || $user->hasRole('admin');
+    }
+
     public function createTournament()
     {
+        abort_unless($this->canManageTournament(), 403);
+
         // dd($this->name, $this->location, $this->start_date, $this->end_date, $this->project_id);
         $this->validate();
 
@@ -62,7 +79,7 @@ new class extends Component {
             'status' => 'draft',
         ]);
 
-        $this->resetprops();
+        $this->resetProps();
         // $this->dispatch('close-modal', name: 'create-tournament');
         $this->newTournamentModal = false;
         $this->dispatch('tournament-created');
@@ -70,7 +87,7 @@ new class extends Component {
         session()->flash('message', 'Tournament created successfully!');
     }
 
-    public function resetprops()
+    public function resetProps()
     {
         $this->reset(['name', 'location', 'start_date', 'end_date']);
     }
@@ -171,17 +188,20 @@ new class extends Component {
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <flux:modal.trigger name="create-tournament">
-                        <button
-                            class="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors group">
-                            <svg class="w-8 h-8 mb-2 group-hover:scale-110 transition-transform" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
-                            <span class="font-medium">Add New Tournament</span>
-                        </button>
-                    </flux:modal.trigger>
+                    @if ($this->canManageTournament())
+
+                        <flux:modal.trigger name="create-tournament">
+                            <button
+                                class="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors group">
+                                <svg class="w-8 h-8 mb-2 group-hover:scale-110 transition-transform" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                </svg>
+                                <span class="font-medium">Add New Tournament</span>
+                            </button>
+                        </flux:modal.trigger>
+                    @endif
 
                     @forelse ($tournaments as $tournament)
                         <div
@@ -219,8 +239,7 @@ new class extends Component {
                                     </div>
                                 </div>
                             </div>
-                            <flux:button 
-                            href="{{ route('tournaments.show', $tournament->id) }}" wire:navigate
+                            <flux:button href="{{ route('tournaments.show', $tournament->id) }}" wire:navigate
                                 class="mt-6 w-full py-2 px-4 {{ $tournament->status === 'live' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200' }} rounded-lg text-sm font-medium transition-colors">
                                 {{ $tournament->status === 'live' ? 'View Details' : 'Manage' }}
                             </flux:button>
@@ -237,9 +256,10 @@ new class extends Component {
 
         </div>
 
+
     </section>
 
-    <flux:modal wire:model.self="newTournamentModal" wire:cancel="resetprops" wire:close="resetprops"
+    <flux:modal wire:model.self="newTournamentModal" wire:cancel="resetProps" wire:close="resetProps"
         name="create-tournament" class="md:w-[500px]">
         <form wire:submit="createTournament" class="space-y-6">
             <div>

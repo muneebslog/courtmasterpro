@@ -14,7 +14,7 @@ new class extends Component {
     public string $type = 'individual'; // individual | team
     public string $default_discipline = 'singles'; // singles | doubles | mixed
     public int $best_of_sets = 3;
-    public string $status = 'draft';
+    public string $status = 'upcoming';
 
     public bool $showEditTournamentModal = false;
 
@@ -25,6 +25,14 @@ new class extends Component {
     public string $edit_end_date = '';
 
     public bool $showDeleteTournamentModal = false;
+
+
+    public function canManageTournament(): bool
+    {
+        $user = auth()->user();
+
+        return $user->isProjectOwner() || $user->hasRole('admin');
+    }
 
 
 
@@ -41,6 +49,7 @@ new class extends Component {
 
     public function openEditTournament()
     {
+        abort_unless($this->canManageTournament(), 403);
         $this->edit_name = $this->tournament->name;
         $this->edit_location = $this->tournament->location;
         $this->edit_status = $this->tournament->status;
@@ -54,6 +63,7 @@ new class extends Component {
 
     public function updateTournament()
     {
+        abort_unless($this->canManageTournament(), 403);
         $this->validate([
             'edit_name' => ['required', 'string', 'max:255'],
             'edit_location' => ['nullable', 'string', 'max:255'],
@@ -84,6 +94,7 @@ new class extends Component {
 
     public function deleteTournament()
     {
+        abort_unless($this->canManageTournament(), 403);
         if (!$this->canDeleteTournament()) {
             return;
         }
@@ -102,12 +113,13 @@ new class extends Component {
             'type' => ['required', 'in:individual,team'],
             'default_discipline' => ['required', 'in:singles,doubles,mixed'],
             'best_of_sets' => ['required', 'in:1,3,5'],
-            'status' => ['required', 'in:draft,live,finished'],
+            'status' => ['required', 'in:upcoming,live,finished'],
         ];
     }
 
     public function createEvent()
     {
+        abort_unless($this->canManageTournament(), 403);
         $this->validate();
 
         Event::create([
@@ -153,6 +165,7 @@ new class extends Component {
 
     public function publishTournament()
     {
+        abort_unless($this->canManageTournament(), 403);
         if ($this->tournament->status === 'draft') {
             $this->tournament->update(['status' => 'live']);
         } elseif ($this->tournament->status === 'live') {
@@ -226,27 +239,31 @@ new class extends Component {
                     </div>
                     <div class="flex items-center flex-col gap-3">
                         <div class="flex items-center gap-3">
+                            @if ($this->canManageTournament())
+                                @if ($this->canDeleteTournament())
+                                    <flux:button variant="danger" wire:click="$set('showDeleteTournamentModal', true)">
+                                        Delete Tournament
+                                    </flux:button>
+                                @endif
 
-                            @if ($this->canDeleteTournament())
-                                <flux:button variant="danger" wire:click="$set('showDeleteTournamentModal', true)">
-                                    Delete Tournament
+                                <flux:button variant="outline" wire:click="openEditTournament">
+                                    Edit Tournament
                                 </flux:button>
                             @endif
 
-                            <flux:button variant="outline" wire:click="openEditTournament">
-                                Edit Tournament
-                            </flux:button>
                         </div>
 
+                        @if ($this->canManageTournament())
 
-                        @if ($tournament->status !== 'completed')
-                            <flux:button variant="primary" wire:click="publishTournament">
-                                @if ($tournament->status === 'draft')
-                                    Publish Tournament
-                                @else
-                                    Mark as Completed
-                                @endif
-                            </flux:button>
+                            @if ($tournament->status !== 'completed')
+                                <flux:button variant="primary" wire:click="publishTournament">
+                                    @if ($tournament->status === 'draft')
+                                        Publish Tournament
+                                    @else
+                                        Mark as Completed
+                                    @endif
+                                </flux:button>
+                            @endif
                         @endif
 
 
@@ -265,13 +282,15 @@ new class extends Component {
                         <p class="text-sm text-gray-500">Categories created for this tournament</p>
                     </div>
                     <div class="">
+                        @if ($this->canManageTournament())
 
-                        <flux:modal.trigger name="create-event">
-                            <flux:button wire:navigate icon="plus"
-                                class="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
-                                Create Event
-                            </flux:button>
-                        </flux:modal.trigger>
+                            <flux:modal.trigger name="create-event">
+                                <flux:button wire:navigate icon="plus"
+                                    class="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
+                                    Create Event
+                                </flux:button>
+                            </flux:modal.trigger>
+                        @endif
 
                     </div>
 
@@ -322,7 +341,7 @@ new class extends Component {
                                         <span @class([
                                             'px-2 py-0.5 text-[10px] font-bold uppercase rounded',
                                             'bg-green-100 text-green-700' => $event->status === 'ongoing',
-                                            'bg-blue-100 text-blue-700' => $event->status === 'draft',
+                                            'bg-blue-100 text-blue-700' => $event->status === 'upcoming',
                                             'bg-gray-100 text-gray-500' => $event->status === 'completed',
                                         ])>
                                             {{ ucfirst($event->status) }}
@@ -379,7 +398,7 @@ new class extends Component {
 
                         {{-- Status --}}
                         <flux:select label="Status" wire:model.defer="status">
-                            <option value="draft">draft</option>
+                            <option value="upcoming">upcoming</option>
                             <option value="live">Live</option>
                             <option value="finished">Finished</option>
                         </flux:select>
@@ -449,7 +468,7 @@ new class extends Component {
                     </div>
                 </flux:modal>
 
-           
+
 
 
             </section>

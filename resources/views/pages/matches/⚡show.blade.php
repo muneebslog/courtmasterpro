@@ -10,6 +10,7 @@ new class extends Component {
     public int $teamAWins = 0;
     public int $teamBWins = 0;
     public ?int $winnerTeamId = null;
+    
 
     public function mount($match)
     {

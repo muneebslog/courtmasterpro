@@ -23,6 +23,103 @@ new class extends Component {
     public $teamBId = null;
     public $isBye = false;
 
+    public bool $showEditEventModal = false;
+    public bool $showDeleteEventModal = false;
+
+    // edit form
+    public string $edit_name = '';
+    public string $edit_type = '';
+    public string $edit_default_discipline = '';
+    public int $edit_best_of_sets;
+    public string $edit_status = '';
+
+    public function canEditEvent(): bool
+    {
+        return $this->event->rounds->isEmpty();
+    }
+
+    public function canDeleteEvent(): bool
+    {
+        return $this->event->status === 'upcoming'
+            && $this->event->rounds->count() === 0;
+    }
+
+    public function openEditEvent()
+    {
+        abort_unless($this->canManage(), 403);
+
+        if (!$this->canEditEvent()) {
+            return;
+        }
+
+        $this->edit_name = $this->event->name;
+        $this->edit_type = $this->event->type;
+        $this->edit_default_discipline = $this->event->default_discipline;
+        $this->edit_best_of_sets = $this->event->best_of_sets;
+        $this->edit_status = $this->event->status;
+
+        $this->showEditEventModal = true;
+    }
+
+    public function canManage(): bool
+    {
+        $user = auth()->user();
+
+        return $user->isProjectOwner() || $user->hasRole('admin');
+    }
+
+    public function isUmpire(): bool
+    {
+        $user = auth()->user();
+
+        return $user->isProjectOwner() || $user->hasRole('umpire') || $user->hasRole('admin');
+    }
+
+    public function updateEvent()
+    {
+        abort_unless($this->canManage(), 403);
+        if (!$this->canEditEvent()) {
+            return;
+        }
+
+        $this->validate([
+            'edit_name' => 'required|string|max:255',
+            'edit_type' => 'required|in:individual,team',
+            'edit_default_discipline' => 'required|in:singles,doubles,mixed',
+            'edit_best_of_sets' => 'required|in:1,3,5',
+            'edit_status' => 'required|in:draft,live,completed',
+        ]);
+
+        $this->event->update([
+            'name' => $this->edit_name,
+            'type' => $this->edit_type,
+            'default_discipline' => $this->edit_default_discipline,
+            'best_of_sets' => $this->edit_best_of_sets,
+            'status' => $this->edit_status,
+        ]);
+
+        $this->loadEvent();
+        $this->showEditEventModal = false;
+    }
+
+    public function deleteEvent()
+    {
+        abort_unless($this->canManage(), 403);
+
+        if (!$this->canDeleteEvent()) {
+            return;
+        }
+
+        $tournamentId = $this->event->tournament_id;
+
+        $this->event->delete();
+
+        return redirect()->route('tournaments.show', $tournamentId);
+    }
+
+
+
+
 
     public function mount(Event $event)
     {
@@ -107,6 +204,8 @@ new class extends Component {
     }
     public function generateMatches()
     {
+        abort_unless($this->canManage(), 403);
+
         if (empty($this->roundPreview)) {
             return;
         }
@@ -163,6 +262,8 @@ new class extends Component {
 
     public function assignTeams()
     {
+        abort_unless($this->canManage(), 403);
+
         $match = MatchGame::findOrFail($this->selectedMatchId);
 
         DB::transaction(function () use ($match) {
@@ -298,15 +399,26 @@ new class extends Component {
                         </div>
                         <div class=" flex flex-col gap-4">
                             <div class="flex gap-3">
+                                @if ($this->canManage())
 
-                                <button
-                                    class="px-4 py-2 border border-[#E5E7EB] text-[#111827] font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">Edit
-                                    Event</button>
-                                <flux:modal.trigger name="generate-matches">
-                                    <flux:button variant="primary" color="blue">
-                                        Generate Matches
-                                    </flux:button>
-                                </flux:modal.trigger>
+                                    @if ($this->canEditEvent())
+                                        <flux:button variant="outline" wire:click="openEditEvent">
+                                            Edit Event
+                                        </flux:button>
+                                    @endif
+
+                                    @if ($this->canDeleteEvent())
+                                        <flux:button variant="danger" wire:click="$set('showDeleteEventModal', true)">
+                                            Delete Event
+                                        </flux:button>
+                                    @endif
+                                    <flux:modal.trigger name="generate-matches">
+                                        <flux:button variant="primary" color="blue">
+                                            Generate Matches
+                                        </flux:button>
+                                    </flux:modal.trigger>
+                                @endif
+
                             </div>
 
                             <flux:button x-cloak variant="primary"
@@ -356,8 +468,8 @@ new class extends Component {
                                     <button @click="activeRoundId = {{ $round->id }}"
                                         class="px-3 py-1.5 text-xs font-medium rounded-md transition"
                                         :class="activeRoundId === {{ $round->id }}
-                                                                                                                                                                                                ? 'bg-[#2563EB] text-white'
-                                                                                                                                                                                                : 'text-[#6B7280] hover:text-[#111827]'">
+                                                                                                                                                                                                                                                                        ? 'bg-[#2563EB] text-white'
+                                                                                                                                                                                                                                                                        : 'text-[#6B7280] hover:text-[#111827]'">
                                         {{ $round->short_name ?? Str::upper(Str::slug($round->name, '')) }}
                                     </button>
                                 @endforeach
@@ -434,23 +546,48 @@ new class extends Component {
                                             <td class="px-6 py-4">
                                                 <span
                                                     class="px-2 py-1 text-[10px] font-bold rounded
-                                                                                                                                                                                                                                                                                                                                                            {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
                                                     {{ strtoupper($match->status) }}
                                                 </span>
                                             </td>
 
                                             <td class="px-6 py-4 text-right">
-                                                @if ($match->team_a_id == null && $match->team_b_id == null)
+                                                @if ($this->isUmpire())
 
-                                                    <flux:button size="xs" wire:click="openAssignTeamsModal({{ $match->id }})">
-                                                        Assign Teams
-                                                    </flux:button>
-                                                @else
-                                                    <flux:button href="{{ route('matches.show', ['match' => $match->id] ) }}" wire:navigate size="xs">
+                                                    @if ($match->team_a_id == null && $match->team_b_id == null)
+                                                        @if ($this->canManage())
+
+                                                            <flux:button size="xs" wire:click="openAssignTeamsModal({{ $match->id }})">
+                                                                Assign Teams
+                                                            </flux:button>
+                                                        @endif
+                                                    @else
+                                                                                                            @if ($this->canManage())
+
+                                                        @if ($match->status == 'scheduled')
+
+                                                            <flux:button variant="primary" color="red" size="xs">
+                                                                Edit Match
+                                                            </flux:button>
+                                                        @endif
+                                                                                                                    @endif
+
+                                                        @if ($match->status == 'scheduled')
+
+                                                            <flux:button variant="primary" color="red"
+                                                                href="{{ route('matches.controlpanel', $match->id) }}" wire:navigate
+                                                                size="xs">
+                                                                Start Match
+                                                            </flux:button>
+                                                        @endif
+
+                                                    @endif
+                                                @endif
+                                                @if ($match->status == 'completed')
+
+                                                    <flux:button href="{{ route('matches.show', ['match' => $match->id]) }}"
+                                                        wire:navigate size="xs">
                                                         Match Details
-                                                    </flux:button>
-                                                     <flux:button variant="primary" color="red" href="{{ route('matches.controlpanel',  $match->id) }}" wire:navigate size="xs">
-                                                        Start Match
                                                     </flux:button>
                                                 @endif
 
@@ -548,8 +685,7 @@ new class extends Component {
 
 
                 {{-- TEAM B --}}
-                <flux:select  label="Team B" wire:model="teamBId" 
-                    :disabled="$isBye" :invalid="$isBye">
+                <flux:select label="Team B" wire:model="teamBId" :disabled="$isBye" :invalid="$isBye">
                     <flux:select.option value="">Select team</flux:select.option>
                     @foreach ($this->assignableTeams as $team)
                                     <flux:select.option value="{{ $team->id }}">
@@ -569,6 +705,75 @@ new class extends Component {
 
             </form>
         </flux:modal>
+        <flux:modal wire:model.self="showEditEventModal" class="md:w-[420px]">
+            <form wire:submit.prevent="updateEvent" class="space-y-6">
+
+                <flux:heading size="lg">Edit Event</flux:heading>
+
+                <flux:input label="Event Name" wire:model.defer="edit_name" />
+
+                <flux:select label="Event Type" wire:model.defer="edit_type">
+                    <option value="individual">Individual</option>
+                    <option value="team">Team</option>
+                </flux:select>
+
+                <flux:select label="Default Discipline" wire:model.defer="edit_default_discipline">
+                    <option value="singles">Singles</option>
+                    <option value="doubles">Doubles</option>
+                    <option value="mixed">Mixed</option>
+                </flux:select>
+
+                <flux:select label="Best of Sets" wire:model.defer="edit_best_of_sets">
+                    <option value="1">1</option>
+                    <option value="3">3</option>
+                    <option value="5">5</option>
+                </flux:select>
+
+                <flux:select label="Status" wire:model.defer="edit_status">
+                    <option value="draft">Draft</option>
+                    <option value="live">Live</option>
+                    <option value="completed">Completed</option>
+                </flux:select>
+
+                <div class="flex pt-2">
+                    <flux:spacer />
+                    <flux:button type="submit" variant="primary">
+                        Save Changes
+                    </flux:button>
+                </div>
+
+            </form>
+        </flux:modal>
+
+        <flux:modal wire:model.self="showDeleteEventModal" class="md:w-[420px]">
+            <div class="space-y-6">
+
+                <flux:heading size="lg" class="text-red-600">
+                    Delete Event
+                </flux:heading>
+
+                <p class="text-sm text-gray-600">
+                    This action cannot be undone.
+                </p>
+
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+                    Event: <strong>{{ $event->name }}</strong>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <flux:button variant="outline" wire:click="$set('showDeleteEventModal', false)">
+                        Cancel
+                    </flux:button>
+
+                    <flux:button variant="danger" wire:click="deleteEvent">
+                        Yes, Delete
+                    </flux:button>
+                </div>
+
+            </div>
+        </flux:modal>
+
+
 
 
     </section>

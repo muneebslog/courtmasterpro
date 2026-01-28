@@ -48,5 +48,11 @@ Route::get('/matches/{match}/report', [MatchReportController::class, 'download']
 Route::get('/matches/{match}/report/summary', [MatchReportController::class, 'downloadSummary'])
     ->name('matches.report.summary');
 
+// route for 
+Route::livewire('/settings/roles', 'core.roles')
+    ->middleware(['auth', 'verified'])
+    ->name('roles');
+
+
 
 require __DIR__ . '/settings.php';

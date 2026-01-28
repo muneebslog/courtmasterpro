@@ -11,6 +11,7 @@ class ProjectUserRole extends Model
         'project_id',
         'user_id',
         'role',
+        'is_active',
     ];
 
     public function project(): BelongsTo
