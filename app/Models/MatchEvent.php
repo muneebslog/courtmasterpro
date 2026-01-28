@@ -12,6 +12,9 @@ class MatchEvent extends Model
         'set_id',
         'team_id',
         'type',
+        'team_a_points',
+        'team_b_points',
+        'player_id',
         'description',
         'occurred_at',
     ];
@@ -33,5 +36,9 @@ class MatchEvent extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+    public function player(): BelongsTo
+    {
+        return $this->belongsTo(Player::class);
     }
 }

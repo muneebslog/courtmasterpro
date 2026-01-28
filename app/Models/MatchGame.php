@@ -17,6 +17,8 @@ class MatchGame extends Model
         'court_no',
         'scheduled_at',
         'started_at',
+        'umpire',
+        'referee',
         'ended_at',
         'winner_team_id',
         'status',

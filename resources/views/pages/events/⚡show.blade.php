@@ -449,7 +449,7 @@ new class extends Component {
                                                     <flux:button href="{{ route('matches.show', ['match' => $match->id] ) }}" wire:navigate size="xs">
                                                         Match Details
                                                     </flux:button>
-                                                     <flux:button variant="primary" color="red" href="{{ route('matches.controlpanel', ['match' => $match->id] ) }}" wire:navigate size="xs">
+                                                     <flux:button variant="primary" color="red" href="{{ route('matches.controlpanel',  $match->id) }}" wire:navigate size="xs">
                                                         Start Match
                                                     </flux:button>
                                                 @endif

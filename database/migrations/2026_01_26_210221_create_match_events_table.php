@@ -16,7 +16,19 @@ return new class extends Migration
             $table->foreignId('match_id')->constrained('matches')->onDelete('cascade');
             $table->foreignId('set_id')->nullable()->constrained('sets')->onDelete('cascade');
             $table->foreignId('team_id')->nullable()->constrained('teams')->onDelete('cascade');
-            $table->enum('type', ['timeout', 'injury', 'walkover']);
+            $table->enum('type', [
+                'match_started',
+                'match_ended',
+                'set_started',
+                'set_ended',
+                'point_scored',
+                'yellow_card',
+                'red_card',
+                'injury',
+                'timeout',
+                'walkover',
+                'info'
+            ])->default('info');
             $table->text('description')->nullable();
             $table->dateTime('occurred_at');
             $table->timestamps();

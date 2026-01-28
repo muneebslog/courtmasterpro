@@ -50,4 +50,28 @@ class Team extends Model
     {
         return $this->matchesAsA->merge($this->matchesAsB);
     }
+
+    public function getDisplayNameAttribute(): string
+    {
+        // 1️⃣ If team name exists, return it
+        if (!empty($this->name)) {
+            return $this->name;
+        }
+
+        // 2️⃣ Get players' first names
+        $players = $this->players->pluck('first_name');
+
+        // 3️⃣ No players edge-case (just in case)
+        if ($players->isEmpty()) {
+            return 'Unknown Team';
+        }
+
+        // 4️⃣ Single player
+        if ($players->count() === 1) {
+            return $players->first();
+        }
+
+        // 5️⃣ Doubles or more → join with &
+        return $players->implode(' & ');
+    }
 }
