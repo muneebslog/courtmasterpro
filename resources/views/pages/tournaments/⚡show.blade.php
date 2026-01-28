@@ -14,7 +14,20 @@ new class extends Component {
     public string $type = 'individual'; // individual | team
     public string $default_discipline = 'singles'; // singles | doubles | mixed
     public int $best_of_sets = 3;
-    public string $status = 'upcoming';
+    public string $status = 'draft';
+
+    public bool $showEditTournamentModal = false;
+
+    public string $edit_name = '';
+    public string $edit_location = '';
+    public string $edit_status = 'draft';
+    public string $edit_start_date = '';
+    public string $edit_end_date = '';
+
+    public bool $showDeleteTournamentModal = false;
+
+
+
 
     public function mount(Tournament $tournament)
     {
@@ -26,6 +39,62 @@ new class extends Component {
         // dd($this->tournament);
     }
 
+    public function openEditTournament()
+    {
+        $this->edit_name = $this->tournament->name;
+        $this->edit_location = $this->tournament->location;
+        $this->edit_status = $this->tournament->status;
+
+        // ✅ preload dates (HTML date input expects Y-m-d)
+        $this->edit_start_date = $this->tournament->start_date?->format('Y-m-d') ?? '';
+        $this->edit_end_date = $this->tournament->end_date?->format('Y-m-d') ?? '';
+
+        $this->showEditTournamentModal = true;
+    }
+
+    public function updateTournament()
+    {
+        $this->validate([
+            'edit_name' => ['required', 'string', 'max:255'],
+            'edit_location' => ['nullable', 'string', 'max:255'],
+            'edit_status' => ['required', 'in:upcoming,live,completed'],
+            'edit_start_date' => ['required', 'date'],
+            'edit_end_date' => ['required', 'date', 'after_or_equal:edit_start_date'],
+        ]);
+
+
+        $this->tournament->update([
+            'name' => $this->edit_name,
+            'location' => $this->edit_location,
+            'status' => $this->edit_status,
+            'start_date' => $this->edit_start_date,
+            'end_date' => $this->edit_end_date,
+        ]);
+
+        $this->tournament->refresh();
+
+        $this->showEditTournamentModal = false;
+    }
+
+    public function canDeleteTournament(): bool
+    {
+        return $this->tournament->status === 'draft'
+            && $this->tournament->events->count() === 0;
+    }
+
+    public function deleteTournament()
+    {
+        if (!$this->canDeleteTournament()) {
+            return;
+        }
+
+        $this->tournament->delete();
+
+        return redirect()->route('dashboard');
+    }
+
+
+
     protected function rules()
     {
         return [
@@ -33,7 +102,7 @@ new class extends Component {
             'type' => ['required', 'in:individual,team'],
             'default_discipline' => ['required', 'in:singles,doubles,mixed'],
             'best_of_sets' => ['required', 'in:1,3,5'],
-            'status' => ['required', 'in:upcoming,live,finished'],
+            'status' => ['required', 'in:draft,live,finished'],
         ];
     }
 
@@ -54,7 +123,7 @@ new class extends Component {
         $this->reset('name', 'type', 'default_discipline', 'best_of_sets', 'status');
 
         // Close modal
-         $this->dispatch('event-created'); 
+        $this->dispatch('event-created');
         Flux::modal('create-event')->close();
 
         // Refresh tournament data
@@ -81,6 +150,18 @@ new class extends Component {
                 ->count(),
         ];
     }
+
+    public function publishTournament()
+    {
+        if ($this->tournament->status === 'draft') {
+            $this->tournament->update(['status' => 'live']);
+        } elseif ($this->tournament->status === 'live') {
+            $this->tournament->update(['status' => 'completed']);
+        }
+
+        $this->tournament->refresh();
+    }
+
 };
 ?>
 
@@ -103,7 +184,7 @@ new class extends Component {
                             <span @class([
                                 'px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider',
                                 'bg-green-100 text-green-700' => $tournament->status === 'live',
-                                'bg-blue-100 text-blue-700' => $tournament->status === 'upcoming',
+                                'bg-blue-100 text-blue-700' => $tournament->status === 'draft',
                                 'bg-gray-100 text-gray-600' => $tournament->status === 'completed',
                             ])>
                                 {{ ucfirst($tournament->status) }}
@@ -143,16 +224,38 @@ new class extends Component {
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <button
-                            class="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">Edit
-                            Tournament</button>
+                    <div class="flex items-center flex-col gap-3">
+                        <div class="flex items-center gap-3">
+
+                            @if ($this->canDeleteTournament())
+                                <flux:button variant="danger" wire:click="$set('showDeleteTournamentModal', true)">
+                                    Delete Tournament
+                                </flux:button>
+                            @endif
+
+                            <flux:button variant="outline" wire:click="openEditTournament">
+                                Edit Tournament
+                            </flux:button>
+                        </div>
+
+
+                        @if ($tournament->status !== 'completed')
+                            <flux:button variant="primary" wire:click="publishTournament">
+                                @if ($tournament->status === 'draft')
+                                    Publish Tournament
+                                @else
+                                    Mark as Completed
+                                @endif
+                            </flux:button>
+                        @endif
+
+
 
                     </div>
                 </div>
             </div>
 
-          
+
 
 
             <section>
@@ -219,7 +322,7 @@ new class extends Component {
                                         <span @class([
                                             'px-2 py-0.5 text-[10px] font-bold uppercase rounded',
                                             'bg-green-100 text-green-700' => $event->status === 'ongoing',
-                                            'bg-blue-100 text-blue-700' => $event->status === 'upcoming',
+                                            'bg-blue-100 text-blue-700' => $event->status === 'draft',
                                             'bg-gray-100 text-gray-500' => $event->status === 'completed',
                                         ])>
                                             {{ ucfirst($event->status) }}
@@ -276,7 +379,7 @@ new class extends Component {
 
                         {{-- Status --}}
                         <flux:select label="Status" wire:model.defer="status">
-                            <option value="upcoming">Upcoming</option>
+                            <option value="draft">draft</option>
                             <option value="live">Live</option>
                             <option value="finished">Finished</option>
                         </flux:select>
@@ -290,6 +393,64 @@ new class extends Component {
 
                     </form>
                 </flux:modal>
+
+                <flux:modal wire:model.self="showEditTournamentModal" class="md:w-[420px]">
+                    <form wire:submit.prevent="updateTournament" class="space-y-6">
+
+                        <div>
+                            <flux:heading size="lg">Edit Tournament</flux:heading>
+                            <flux:text class="mt-2">
+                                Update tournament details.
+                            </flux:text>
+                        </div>
+
+                        <flux:input label="Tournament Name" wire:model.defer="edit_name" />
+
+                        <flux:input label="Location" wire:model.defer="edit_location" />
+
+                        <flux:input type="date" label="Start Date" wire:model.defer="edit_start_date" />
+
+                        <flux:input type="date" label="End Date" wire:model.defer="edit_end_date" />
+
+
+                        <flux:select label="Status" wire:model.defer="edit_status">
+                            <option value="draft">draft</option>
+                            <option value="live">Live</option>
+                            <option value="completed">Completed</option>
+                        </flux:select>
+
+                        <div class="flex pt-2">
+                            <flux:spacer />
+                            <flux:button type="submit" variant="primary">
+                                Save Changes
+                            </flux:button>
+                        </div>
+
+                    </form>
+                </flux:modal>
+
+                <flux:modal name="delete-profile" wire:model.self="showDeleteTournamentModal" class="min-w-[22rem]">
+                    <div class="space-y-6">
+                        <div>
+                            <flux:heading size="lg">Delete Tournament</flux:heading>
+                            <flux:text class="mt-2">
+                                You're about to delete this tournament: <strong>{{ $tournament->name }}</strong><br>
+                                This action cannot be reversed.
+                            </flux:text>
+                        </div>
+                        <div class="flex gap-2">
+                            <flux:spacer />
+                            <flux:modal.close>
+                                <flux:button variant="ghost">Cancel</flux:button>
+                            </flux:modal.close>
+                            <flux:button type="submit" wire:click="deleteTournament" variant="danger">Delete tournament
+                            </flux:button>
+                        </div>
+                    </div>
+                </flux:modal>
+
+           
+
 
             </section>
 

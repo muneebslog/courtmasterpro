@@ -138,6 +138,11 @@ new class extends Component {
 
         if ($this->actionCategory === 'walkover') {
 
+            if (!$this->actionTeamId) {
+                $this->addError('actionTeamId', 'Select a team for walkover.');
+                return;
+            }
+
             $result = app(MatchService::class)
                 ->handleWalkover($this->match, $this->set, $this->actionTeamId);
 
@@ -352,20 +357,20 @@ new class extends Component {
                     @if ($match->status === 'live')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                bg-green-100 text-green-700 border border-green-200">
+                                                                                                                                                                                                                bg-green-100 text-green-700 border border-green-200">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
                             LIVE
                         </span>
                     @elseif ($match->status === 'completed')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                bg-slate-100 text-slate-700 border border-slate-200">
+                                                                                                                                                                                                                bg-slate-100 text-slate-700 border border-slate-200">
                             COMPLETED
                         </span>
                     @else
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                                                                                                                                                                                                bg-yellow-100 text-yellow-700 border border-yellow-200">
                             NOT STARTED
                         </span>
                     @endif
@@ -512,8 +517,8 @@ new class extends Component {
 
                                     <flux:select label='Player (optional)' wire:model="actionPlayerId"
                                         class="w-full rounded-lg border-slate-300 text-sm
-                                                                                                            focus:ring-blue-500 focus:border-blue-500
-                                                                                                            disabled:bg-slate-100" :disabled="!$actionTeamId">
+                                                                                                                            focus:ring-blue-500 focus:border-blue-500
+                                                                                                                            disabled:bg-slate-100" :disabled="!$actionTeamId">
                                         <flux:select.option value="">
                                             — Team Level Action —
                                         </flux:select.option>
