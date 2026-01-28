@@ -54,7 +54,7 @@ new class extends Component {
         $this->reset('name', 'type', 'default_discipline', 'best_of_sets', 'status');
 
         // Close modal
-        // $this->dispatch('close-modal', name: 'create-event');
+         $this->dispatch('event-created'); 
         Flux::modal('create-event')->close();
 
         // Refresh tournament data

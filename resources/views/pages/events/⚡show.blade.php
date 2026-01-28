@@ -6,12 +6,14 @@ use App\Models\Event;
 use App\Models\Round;
 use App\Models\MatchGame;
 use Illuminate\Support\Facades\DB;
+use App\Models\Team;
 
 
 
 new class extends Component {
     public Event $event;
     public $event_id;
+    public $editingMatchId;
     public $firstRoundMatches = 0;
     public $roundPreview = [];
     public $renderKey = 0;
@@ -20,59 +22,6 @@ new class extends Component {
     public $teamAId = null;
     public $teamBId = null;
     public $isBye = false;
-    public bool $showCreateTeamModal = false;
-
-    public ?string $teamName = null;
-
-    public array $players = [
-        ['first_name' => '', 'last_name' => ''],
-    ];
-
-    public function addPlayerRow()
-    {
-        $this->players[] = ['first_name' => '', 'last_name' => ''];
-    }
-
-    public function removePlayerRow($index)
-    {
-        if (count($this->players) > 1) {
-            unset($this->players[$index]);
-            $this->players = array_values($this->players);
-        }
-    }
-
-
-    public function createTeam()
-    {
-        $this->validate([
-            'teamName' => 'nullable|string|max:255',
-            'players.*.first_name' => 'required|string|max:100',
-            'players.*.last_name' => 'nullable|string|max:100',
-        ]);
-
-        DB::transaction(function () {
-
-            $team = $this->event->teams()->create([
-                'name' => $this->teamName,
-            ]);
-
-            foreach ($this->players as $playerData) {
-                $player = \App\Models\Player::create($playerData);
-                $team->players()->attach($player->id);
-            }
-        });
-
-        // reset state
-        $this->reset('teamName', 'players');
-
-        $this->players = [
-            ['first_name' => '', 'last_name' => ''],
-        ];
-
-        Flux::modal('create-team')->close();
-
-    }
-
 
 
     public function mount(Event $event)
@@ -93,12 +42,29 @@ new class extends Component {
                 ->count(),
 
             'matches' => $matches->count(),
+            'teams' => $this->event->teams->count(),
 
             'completed' => $matches->where('status', 'completed')->count(),
 
             'live' => $matches->where('status', 'live')->count(),
         ];
     }
+
+    public function getAssignableTeamsProperty()
+    {
+        $teams = $this->event->teams;
+
+        if (!$this->editingMatchId) {
+            return $teams->where('is_assigned', false);
+        }
+
+        return $teams->filter(
+            fn($team) =>
+            !$team->is_assigned
+            || in_array($team->id, [$this->teamAId, $this->teamBId])
+        );
+    }
+
 
 
     public function updatedFirstRoundMatches()
@@ -199,24 +165,50 @@ new class extends Component {
     {
         $match = MatchGame::findOrFail($this->selectedMatchId);
 
-        if ($this->isBye) {
-            $match->update([
-                'team_a_id' => $this->teamAId,
-                'team_b_id' => null,
-                'status' => 'bye',
-            ]);
-        } else {
-            $this->validate([
-                'teamAId' => 'required|different:teamBId',
-                'teamBId' => 'required',
-            ]);
+        DB::transaction(function () use ($match) {
 
-            $match->update([
-                'team_a_id' => $this->teamAId,
-                'team_b_id' => $this->teamBId,
-                'status' => 'scheduled',
-            ]);
-        }
+            // 🧹 UNASSIGN previously assigned teams (if editing)
+            Team::whereIn('id', array_filter([
+                $match->team_a_id,
+                $match->team_b_id,
+            ]))->update(['is_assigned' => false]);
+
+            if ($this->isBye) {
+
+                $this->validate([
+                    'teamAId' => 'required',
+                ]);
+
+                $match->update([
+                    'team_a_id' => $this->teamAId,
+                    'team_b_id' => null,
+                    'status' => 'bye',
+                ]);
+
+                // ✅ assign only team A
+                Team::where('id', $this->teamAId)
+                    ->update(['is_assigned' => true]);
+
+            } else {
+
+                $this->validate([
+                    'teamAId' => 'required|different:teamBId',
+                    'teamBId' => 'required',
+                ]);
+
+                $match->update([
+                    'team_a_id' => $this->teamAId,
+                    'team_b_id' => $this->teamBId,
+                    'status' => 'scheduled',
+                ]);
+
+                // ✅ assign both teams
+                Team::whereIn('id', [
+                    $this->teamAId,
+                    $this->teamBId,
+                ])->update(['is_assigned' => true]);
+            }
+        });
 
         // Reset modal state
         $this->reset('selectedMatchId', 'teamAId', 'teamBId', 'isBye');
@@ -225,6 +217,7 @@ new class extends Component {
 
         $this->loadEvent(); // refresh UI
     }
+
 
 
 
@@ -275,7 +268,7 @@ new class extends Component {
 
 
 
-        <main class="flex-1 overflow-y-auto">
+        <main x-data="{ viewTab: 'matches'}" class="flex-1 overflow-y-auto">
 
 
             <div class="p-8 max-w-7xl mx-auto">
@@ -303,15 +296,26 @@ new class extends Component {
                                 </span>
                             </div>
                         </div>
-                        <div class="flex gap-3">
-                            <button
-                                class="px-4 py-2 border border-[#E5E7EB] text-[#111827] font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">Edit
-                                Event</button>
-                            <flux:modal.trigger name="generate-matches">
-                                <flux:button variant="primary">
-                                    Generate Matches
-                                </flux:button>
-                            </flux:modal.trigger>
+                        <div class=" flex flex-col gap-4">
+                            <div class="flex gap-3">
+
+                                <button
+                                    class="px-4 py-2 border border-[#E5E7EB] text-[#111827] font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">Edit
+                                    Event</button>
+                                <flux:modal.trigger name="generate-matches">
+                                    <flux:button variant="primary" color="blue">
+                                        Generate Matches
+                                    </flux:button>
+                                </flux:modal.trigger>
+                            </div>
+
+                            <flux:button x-cloak variant="primary"
+                                @click="viewTab = viewTab === 'matches' ? 'teams' : 'matches'">
+                                <span
+                                    x-text="viewTab === 'matches' ? 'Manage Teams n Players' : 'Manage Matches'"></span>
+                            </flux:button>
+
+
 
                         </div>
                     </div>
@@ -319,8 +323,8 @@ new class extends Component {
 
                 <div class="grid grid-cols-4 gap-4 mb-8">
                     <div class="bg-white p-4 rounded-xl border border-[#E5E7EB] custom-shadow">
-                        <p class="text-xs text-[#6B7280] font-medium uppercase tracking-wider">Total Players</p>
-                        <p class="text-2xl font-semibold mt-1">{{ $this->stats['players'] }}</p>
+                        <p class="text-xs text-[#6B7280] font-medium uppercase tracking-wider">Total Teams</p>
+                        <p class="text-2xl font-semibold mt-1">{{ $this->stats['teams'] }}</p>
                     </div>
                     <div class="bg-white p-4 rounded-xl border border-[#E5E7EB] custom-shadow">
                         <p class="text-xs text-[#6B7280] font-medium uppercase tracking-wider">Total Matches</p>
@@ -335,7 +339,9 @@ new class extends Component {
                         <p class="text-2xl font-semibold mt-1 text-[#22C55E]">{{ $this->stats['live'] }}</p>
                     </div>
                 </div>
-                <div wire:key="event-matches-{{ $renderKey }}"
+
+
+                <div x-show="viewTab === 'matches'" wire:key="event-matches-{{ $renderKey }}"
                     x-data="{ viewMode: 'table', activeRoundId: {{ $event->rounds->first()->id ?? 'null' }} }">
 
                     <div class="flex justify-between items-end mb-6">
@@ -350,8 +356,8 @@ new class extends Component {
                                     <button @click="activeRoundId = {{ $round->id }}"
                                         class="px-3 py-1.5 text-xs font-medium rounded-md transition"
                                         :class="activeRoundId === {{ $round->id }}
-                                                                                                                                                        ? 'bg-[#2563EB] text-white'
-                                                                                                                                                        : 'text-[#6B7280] hover:text-[#111827]'">
+                                                                                                                                                                                                ? 'bg-[#2563EB] text-white'
+                                                                                                                                                                                                : 'text-[#6B7280] hover:text-[#111827]'">
                                         {{ $round->short_name ?? Str::upper(Str::slug($round->name, '')) }}
                                     </button>
                                 @endforeach
@@ -367,7 +373,8 @@ new class extends Component {
                     </div>
 
                     <div x-cloak x-show="viewMode === 'bracket'" class="  max-h-[50vh]  pb-4">
-                        <h2 class=" flex justify-center w-full text-gray-500 text-lg font-bold">Ummm , Still Working On
+                        <h2 class=" flex justify-center w-full text-gray-500 text-lg font-bold">Ummm , Still Working
+                            On
                             it! 😅</h2>
 
                     </div>
@@ -427,16 +434,25 @@ new class extends Component {
                                             <td class="px-6 py-4">
                                                 <span
                                                     class="px-2 py-1 text-[10px] font-bold rounded
-                                                                                                                                                                                                                                                                            {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                                                                                                                                                                                                                                                                                                                                                            {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
                                                     {{ strtoupper($match->status) }}
                                                 </span>
                                             </td>
 
                                             <td class="px-6 py-4 text-right">
-                                                <flux:button size="xs" variant="primary"
-                                                    wire:click="openAssignTeamsModal({{ $match->id }})">
-                                                    Assign Teams
-                                                </flux:button>
+                                                @if ($match->team_a_id == null && $match->team_b_id == null)
+
+                                                    <flux:button size="xs" wire:click="openAssignTeamsModal({{ $match->id }})">
+                                                        Assign Teams
+                                                    </flux:button>
+                                                @else
+                                                    <flux:button href="{{ route('matches.show', ['match' => $match->id] ) }}" wire:navigate size="xs">
+                                                        Match Details
+                                                    </flux:button>
+                                                     <flux:button variant="primary" color="red" href="{{ route('matches.controlpanel', ['match' => $match->id] ) }}" wire:navigate size="xs">
+                                                        Start Match
+                                                    </flux:button>
+                                                @endif
 
                                             </td>
                                         </tr>
@@ -446,7 +462,13 @@ new class extends Component {
 
                         </table>
                     </div>
+
+
                 </div>
+                <div class="" x-show="viewTab === 'teams'">
+                    <livewire:pages::participants.manage :event="$event" />
+                </div>
+
             </div>
         </main>
         <flux:modal name="generate-matches" class="md:w-[420px]">
@@ -504,14 +526,17 @@ new class extends Component {
                 </div>
 
                 {{-- TEAM A --}}
+
                 <flux:select label="Team A" wire:model="teamAId">
                     <flux:select.option value="">Select team</flux:select.option>
-                    @foreach ($event->teams as $team)
-                        <flux:select.option value="{{ $team->id }}">
-                            {{ $team->name ?? $team->players->pluck('first_name')->join(', ') }}
-                        </flux:select.option>
+                    @foreach ($this->assignableTeams as $team)
+                                    <flux:select.option value="{{ $team->id }}">
+                                        {{ $team->name
+                        ?? $team->players->pluck('first_name')->join(' & ') }}
+                                    </flux:select.option>
                     @endforeach
                 </flux:select>
+
 
                 <flux:field variant="inline">
                     <flux:checkbox wire:model.live="isBye" />
@@ -520,21 +545,20 @@ new class extends Component {
 
                     <flux:error name="terms" />
                 </flux:field>
-                 <flux:modal.trigger name="create-team">
-            <flux:button size="sm" variant="primary">
-                +
-            </flux:button>
-        </flux:modal.trigger>
+
 
                 {{-- TEAM B --}}
-                <flux:select label="Team B" wire:model="teamBId" :disabled="$isBye">
+                <flux:select  label="Team B" wire:model="teamBId" 
+                    :disabled="$isBye" :invalid="$isBye">
                     <flux:select.option value="">Select team</flux:select.option>
-                    @foreach ($event->teams as $team)
-                        <flux:select.option value="{{ $team->id }}">
-                            {{ $team->name ?? $team->players->pluck('first_name')->join(', ') }}
-                        </flux:select.option>
+                    @foreach ($this->assignableTeams as $team)
+                                    <flux:select.option value="{{ $team->id }}">
+                                        {{ $team->name
+                        ?? $team->players->pluck('first_name')->join(' & ') }}
+                                    </flux:select.option>
                     @endforeach
                 </flux:select>
+
 
                 <div class="flex pt-2">
                     <flux:spacer />
@@ -543,57 +567,6 @@ new class extends Component {
                     </flux:button>
                 </div>
 
-            </form>
-        </flux:modal>
-
-        <flux:modal name="create-team" class="md:w-[520px]">
-            <form wire:submit.prevent="createTeam" class="space-y-6">
-
-                <div>
-                    <flux:heading size="lg">Create Team</flux:heading>
-                    <flux:text class="mt-2">
-                        Add a team and its players for this event.
-                    </flux:text>
-                </div>
-
-                {{-- TEAM NAME --}}
-                <flux:input label="Team Name (flux:select.optional)" wire:model.defer="teamName" placeholder="e.g. Falcons" />
-
-                {{-- PLAYERS --}}
-                <div class="space-y-3">
-                    <p class="text-sm font-semibold text-slate-700">
-                        Players
-                    </p>
-
-                    @foreach ($players as $index => $player)
-                        <div class="flex gap-2 items-end">
-
-                            <flux:input wire:model.defer="players.{{ $index }}.first_name" placeholder="First name"
-                                class="flex-1" />
-
-                            <flux:input wire:model.defer="players.{{ $index }}.last_name" placeholder="Last name"
-                                class="flex-1" />
-
-                            @if (count($players) > 1)
-                                <flux:button type="button" variant="ghost" size="xs" wire:click="removePlayerRow({{ $index }})">
-                                    ✕
-                                </flux:button>
-                            @endif
-                        </div>
-                    @endforeach
-
-                    <flux:button type="button" variant="primary" size="sm" wire:click="addPlayerRow">
-                        + Add Player
-                    </flux:button>
-                </div>
-
-                {{-- ACTIONS --}}
-                <div class="flex pt-2">
-                    <flux:spacer />
-                    <flux:button type="submit" variant="primary">
-                        Create Team
-                    </flux:button>
-                </div>
             </form>
         </flux:modal>
 

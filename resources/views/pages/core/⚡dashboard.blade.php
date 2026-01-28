@@ -65,6 +65,7 @@ new class extends Component {
         $this->resetprops();
         // $this->dispatch('close-modal', name: 'create-tournament');
         $this->newTournamentModal = false;
+        $this->dispatch('tournament-created');
 
         session()->flash('message', 'Tournament created successfully!');
     }
