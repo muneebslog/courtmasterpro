@@ -30,4 +30,5 @@ Route::livewire('/matches/{match}/controlpanel', 'pages::matches.controlpanel')
     ->middleware(['auth', 'verified'])
     ->name('matches.controlpanel');
 
+
 require __DIR__.'/settings.php';

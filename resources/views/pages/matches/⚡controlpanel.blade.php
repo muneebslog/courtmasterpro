@@ -5,6 +5,7 @@ use App\Models\MatchGame;
 use App\Models\Set;
 use App\Models\SetScore;
 use App\Models\MatchEvent;
+use App\Services\MatchService;
 
 new class extends Component {
     public $match;
@@ -23,33 +24,74 @@ new class extends Component {
     public ?int $actionPlayerId = null;
     public $selectedTeamPlayers = [];
 
+    public $completedSets = [];
+
+
     public $showplayerSelect = false;
+
+    public bool $showSetWinnerModal = false;
+    public bool $showMatchWinnerScreen = false;
+
+    public ?int $lastSetWinnerTeamId = null;
+    public ?int $matchWinnerTeamId = null;
+
+    public int $teamAWins = 0;
+    public int $teamBWins = 0;
 
 
 
     public function mount(int $match)
     {
-        // dd('mounted control panel for match '.$match);
         $this->match = MatchGame::with(['teamA.players', 'teamB.players'])->findOrFail($match);
 
+        // ✅ CASE 1: MATCH COMPLETED → show winner screen
+        if ($this->match->status === 'completed') {
+
+            $this->match->load([
+                'sets.scores',
+                'teamA',
+                'teamB',
+            ]);
+
+            $this->completedSets = $this->match->sets
+                ->sortBy('set_number');
+
+            $this->matchWinnerTeamId = $this->match->winner_team_id;
+            $this->showMatchWinnerScreen = true;
+
+            return;
+        }
+
+        // ✅ CASE 2: MATCH NOT STARTED → show start modal
+        if ($this->match->status === 'scheduled') {
+            $this->showStartModal = true;
+        }
+
+        // ✅ CASE 3: MATCH LIVE → load current set
         $this->set = $this->match->sets()
+            ->where('status', 'live')
             ->firstOrCreate(
                 ['set_number' => 1],
                 ['status' => 'live']
             );
 
-        // Optionally ensure the set is live
-        if ($this->set->status !== 'live') {
-            $this->set->update(['status' => 'live']);
-        }
-        if ($this->match->umpire == null || $this->match->status != 'live') {
-            // dd($this->match , $this->match->umpire == null , $this->match->status != 'live');
-            $this->showStartModal = true;
-        }
+        $this->scoreA = $this->set->scores()
+            ->where('team_id', $this->match->team_a_id)
+            ->value('points') ?? 0;
 
-        $this->scoreA = $this->set->scores()->where('team_id', $this->match->team_a_id)->value('points') ?? 0;
-        $this->scoreB = $this->set->scores()->where('team_id', $this->match->team_b_id)->value('points') ?? 0;
+        $this->scoreB = $this->set->scores()
+            ->where('team_id', $this->match->team_b_id)
+            ->value('points') ?? 0;
     }
+
+    public function getSetScore($set, int $teamId): int
+    {
+        return $set->scores
+            ->firstWhere('team_id', $teamId)
+                ?->points ?? 0;
+    }
+
+
     protected function resolveActionType(): string
     {
         return match ($this->actionCategory) {
@@ -127,19 +169,20 @@ new class extends Component {
     }
 
     public function increment(string $team)
+    {
+        $this->updateScore($team, +1);
+
+    }
+
     public function decrement(string $team)
     {
         $currentScore = $team === 'A' ? $this->scoreA : $this->scoreB;
         if ($currentScore <= 0) {
             return;
+        } else {
+            $this->updateScore($team, -1);
         }
-    public function decrement(string $team)
-    {
-        $currentScore = $team === 'A' ? $this->scoreA : $this->scoreB;
-        if ($currentScore <= 0) {
-            return;
-        }
-        $this->updateScore($team, -1);
+
     }
 
     protected function updateScore(string $team, int $delta)
@@ -158,12 +201,49 @@ new class extends Component {
         $this->scoreB = $this->set->scores()->where('team_id', $this->match->team_b_id)->value('points') ?? 0;
 
 
-        $this->log('point_scored', $teamId, 'Point scored');
-    }
+        $result = app(MatchService::class)
+            ->afterPointScored($this->match, $this->set);
+        if ($result['type'] === 'set_completed') {
+
+            $this->lastSetWinnerTeamId = $result['set_winner_team_id'];
+
+            // update scoreboard
+            $this->teamAWins = $this->match->setWinsForTeam($this->match->team_a_id);
+            $this->teamBWins = $this->match->setWinsForTeam($this->match->team_b_id);
+
+            // pause the game
+            $this->showSetWinnerModal = true;
+        }
+
+        if ($result['type'] === 'match_completed') {
+
+            // Reload fresh relations
+            $this->match->load([
+                'sets.scores',
+                'teamA',
+                'teamB',
+            ]);
+
+            $this->completedSets = $this->match->sets
+                ->sortBy('set_number');
+
+            $this->matchWinnerTeamId = $result['match_winner_team_id'];
+            $this->showMatchWinnerScreen = true;
+        }
+
+
+
         $this->log('point_scored', $teamId, 'Point scored');
     }
 
-    protected function log(string $type, ?int $teamId, string $desc , ?int $playerId = null): void
+    public function scoringLocked(): bool
+    {
+        return $this->showSetWinnerModal
+            || $this->showMatchWinnerScreen
+            || $this->match->status === 'completed';
+    }
+
+    protected function log(string $type, ?int $teamId, string $desc, ?int $playerId = null): void
     {
         MatchEvent::create([
             'match_id' => $this->match->id,
@@ -186,6 +266,25 @@ new class extends Component {
             ->limit(20)
             ->get();
     }
+
+    public function confirmStartNextSet()
+    {
+        $this->set = $this->match->sets()->create([
+            'set_number' => $this->set->set_number + 1,
+            'discipline' => $this->set->discipline,
+            'status' => 'live',
+        ]);
+
+        // 👇 RESET LIVEWIRE SCORE STATE
+        $this->scoreA = 0;
+        $this->scoreB = 0;
+
+        $this->log('set_started', null, 'Set started');
+
+        $this->showSetWinnerModal = false;
+    }
+
+
 };
 ?>
 
@@ -227,7 +326,7 @@ new class extends Component {
                     </span>
 
                     <span class="text-sm font-medium text-slate-500">
-                        Set {{ $set->set_number }} of {{ $match->round->event->best_of_sets }}
+                        Set {{ $set?->set_number }} of {{ $match->round->event->best_of_sets }}
                     </span>
                 </div>
 
@@ -243,20 +342,20 @@ new class extends Component {
                     @if ($match->status === 'live')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                        bg-green-100 text-green-700 border border-green-200">
+                                                                                                                                                                                            bg-green-100 text-green-700 border border-green-200">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
                             LIVE
                         </span>
                     @elseif ($match->status === 'completed')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                        bg-slate-100 text-slate-700 border border-slate-200">
+                                                                                                                                                                                            bg-slate-100 text-slate-700 border border-slate-200">
                             COMPLETED
                         </span>
                     @else
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                        bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                                                                                                                                                                            bg-yellow-100 text-yellow-700 border border-yellow-200">
                             NOT STARTED
                         </span>
                     @endif
@@ -290,7 +389,8 @@ new class extends Component {
                             <div class="
                             w-full">
 
-                                <flux:button variant="primary" color="red" class=" w-full" wire:click="decrement('A')">
+                                <flux:button :disabled="$this->scoringLocked()" variant="primary" color="red"
+                                    class=" w-full" wire:click="decrement('A')">
                                     <span class="text-2xl font-bold">
                                         −</span>
                                 </flux:button>
@@ -298,7 +398,8 @@ new class extends Component {
                             </div>
                             <div class="w-full">
 
-                                <flux:button variant="primary" color="green" class="w-full" wire:click="increment('A')">
+                                <flux:button :disabled="$this->scoringLocked()" variant="primary" color="green"
+                                    class="w-full" wire:click="increment('A')">
                                     <span class="text-3xl font-bold">
                                         +</span>
                                 </flux:button>
@@ -322,13 +423,15 @@ new class extends Component {
                         </div>
 
                         <div class="flex gap-4 w-full">
-                            <flux:button variant="primary" color="red" wire:click="decrement('B')" class=" w-full">
+                            <flux:button :disabled="$this->scoringLocked()" variant="primary" color="red"
+                                wire:click="decrement('B')" class=" w-full">
                                 <span class="text-2xl font-bold">
                                     −
                                 </span>
                             </flux:button>
 
-                            <flux:button variant="primary" color="green" wire:click="increment('B')" class=" w-full">
+                            <flux:button :disabled="$this->scoringLocked()" variant="primary" color="green"
+                                wire:click="increment('B')" class=" w-full">
                                 <span class="text-3xl font-bold">
                                     +
                                 </span>
@@ -397,9 +500,10 @@ new class extends Component {
                             @if ($actionCategory != 'walkover' && $this->showplayerSelect)
                                 <div>
 
-                                    <flux:select label='Player (optional)' wire:model="actionPlayerId" class="w-full rounded-lg border-slate-300 text-sm
-                                    focus:ring-blue-500 focus:border-blue-500
-                                    disabled:bg-slate-100" :disabled="!$actionTeamId">
+                                    <flux:select label='Player (optional)' wire:model="actionPlayerId"
+                                        class="w-full rounded-lg border-slate-300 text-sm
+                                                                                                        focus:ring-blue-500 focus:border-blue-500
+                                                                                                        disabled:bg-slate-100" :disabled="!$actionTeamId">
                                         <flux:select.option value="">
                                             — Team Level Action —
                                         </flux:select.option>
@@ -540,4 +644,97 @@ new class extends Component {
             </div>
         </main>
     </section>
+    <flux:modal :dismissible="false" wire:model.self="showSetWinnerModal">
+        <div class="space-y-4 text-center">
+
+            <h2 class="text-xl font-bold">
+                Set Completed
+            </h2>
+
+            <p>
+                Winner:
+                <strong>
+                    {{ $lastSetWinnerTeamId === $match->team_a_id
+    ? $match->teamA->display_name
+    : $match->teamB->display_name }}
+                </strong>
+            </p>
+
+            <p class="text-sm text-slate-500">
+                Sets: {{ $teamAWins }} – {{ $teamBWins }}
+            </p>
+
+            <flux:button variant="primary" wire:click="confirmStartNextSet" class="w-full">
+                Start Next Set
+            </flux:button>
+
+        </div>
+    </flux:modal>
+    @if ($showMatchWinnerScreen)
+        <div class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+            <div class="max-w-md w-full space-y-6 text-center">
+
+                {{-- Title --}}
+                <h1 class="text-4xl font-bold">
+                    Match Completed
+                </h1>
+
+                {{-- Winner --}}
+                <p class="text-xl">
+                   👑  Winner:
+                    <strong>
+                        {{ $matchWinnerTeamId === $match->team_a_id
+            ? $match->teamA->display_name
+            : $match->teamB->display_name }}
+                    </strong>
+                </p>
+
+                {{-- Set summary --}}
+                <div class="bg-slate-50 rounded-lg p-4 space-y-2">
+                    <h3 class="font-semibold text-slate-700">
+                        Set Scores
+                    </h3>
+                    @if (!empty($completedSets))
+
+
+
+                        @foreach ($completedSets as $set)
+                            <div class="flex justify-between text-sm">
+                                <span>
+                                    Set {{ $set->set_number }}
+                                </span>
+
+                                <span class="font-mono font-semibold">
+                                    {{ $this->getSetScore($set, $match->team_a_id) }}
+                                    –
+                                    {{ $this->getSetScore($set, $match->team_b_id) }}
+                                </span>
+                            </div>
+                        @endforeach
+                    @endif
+
+                </div>
+
+                {{-- Final sets won --}}
+                <p class="text-sm text-slate-500">
+                    Final Result:
+                    {{ $match->setWinsForTeam($match->team_a_id) }}
+                    –
+                    {{ $match->setWinsForTeam($match->team_b_id) }}
+                </p>
+
+                {{-- Action --}}
+                <flux:button variant="primary" href="{{ route('events.show', $match->round->event->id) }}" class="w-full">
+                    Go to Dashboard
+                </flux:button>
+                  {{-- Action --}}
+                <flux:button href="{{ route('matches.show', $match->id) }}" class="w-full">
+                    See Event Details
+                </flux:button>
+
+            </div>
+        </div>
+    @endif
+
+
 </div>

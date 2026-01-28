@@ -55,4 +55,37 @@ class MatchGame extends Model
     {
         return $this->hasMany(Set::class, 'match_id');
     }
+
+    public function requiredSetsToWin(): int
+    {
+        return (int) ceil($this->round->event->best_of_sets / 2);
+    }
+
+    public function setWinsForTeam(int $teamId): int
+    {
+        return $this->sets()
+            ->where('winner_team_id', $teamId)
+            ->count();
+    }
+
+    public function hasWinner(): bool
+    {
+        return
+            $this->setWinsForTeam($this->team_a_id) >= $this->requiredSetsToWin() ||
+            $this->setWinsForTeam($this->team_b_id) >= $this->requiredSetsToWin();
+    }
+
+    public function determineWinner(): int
+    {
+        return $this->setWinsForTeam($this->team_a_id) >
+            $this->setWinsForTeam($this->team_b_id)
+            ? $this->team_a_id
+            : $this->team_b_id;
+    }
+
+    // Add relation to match events
+    public function matchEvents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(MatchEvent::class, 'match_id');
+    }
 }
