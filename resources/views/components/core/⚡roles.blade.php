@@ -70,11 +70,11 @@ new class extends Component {
 
         $this->closeAndRefresh();
     }
+
     /* ---------------- EDIT USER ---------------- */
+
     public function openEditUser(int $userId)
     {
-        abort_unless(auth()->user()->isProjectOwner(), 403);
-
         $pivot = $this->project->users()->where('users.id', $userId)->first()->pivot;
 
         $user = User::findOrFail($userId);
@@ -87,11 +87,9 @@ new class extends Component {
 
         $this->showEditUserModal = true;
     }
-      
+
     public function updateUser()
     {
-        abort_unless(auth()->user()->isProjectOwner(), 403);
-
         $this->validate([
             'role' => 'required|in:admin,referee,umpire,viewer',
         ]);
@@ -106,28 +104,17 @@ new class extends Component {
 
         $this->closeAndRefresh();
     }
-        );
-
-        $this->closeAndRefresh();
-    }
 
     /* ---------------- DELETE USER ---------------- */
 
     public function confirmDeleteUser(int $userId)
     {
+        $this->editingUserId = $userId;
+        $this->showDeleteUserModal = true;
+    }
+
     public function deleteUser()
     {
-        abort_unless(auth()->user()->isProjectOwner(), 403);
-
-        if ($this->editingUserId === auth()->id()) {
-            session()->flash('error', 'You cannot remove yourself from the project.');
-            return;
-        }
-
-        $this->project->users()->detach($this->editingUserId);
-
-        $this->closeAndRefresh();
-    }
         $this->project->users()->detach($this->editingUserId);
 
         $this->closeAndRefresh();
