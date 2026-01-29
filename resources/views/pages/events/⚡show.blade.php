@@ -476,10 +476,10 @@ new class extends Component {
                             </div>
 
 
-                            <button @click="viewMode = viewMode === 'bracket' ? 'table' : 'bracket'"
+                            <button 
                                 class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-[#E5E7EB] bg-white rounded-lg hover:bg-gray-50">
                                 <span
-                                    x-text="viewMode === 'bracket' ? 'Switch to Table View' : 'Get Data'"></span>
+                                    x-text="'Get Data'"></span>
                             </button>
                         </div>
                     </div>

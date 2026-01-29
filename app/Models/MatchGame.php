@@ -44,6 +44,11 @@ class MatchGame extends Model
     {
         return $this->belongsTo(Team::class, 'team_b_id');
     }
+    public function canContinuePlaying(): bool
+    {
+        return !$this->hasWinner() && $this->status !== 'completed';
+    }
+
 
     public function winner(): BelongsTo
     {
@@ -78,6 +83,10 @@ class MatchGame extends Model
 
     public function determineWinner(): int
     {
+        if (!$this->hasWinner()) {
+            throw new \LogicException('Cannot determine winner: match is not yet decided.');
+        }
+
         return $this->visualMatchWinsForTeam($this->team_a_id) >
             $this->visualMatchWinsForTeam($this->team_b_id)
             ? $this->team_a_id
