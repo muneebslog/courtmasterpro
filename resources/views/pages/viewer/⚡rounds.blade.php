@@ -1,15 +1,15 @@
 <?php
 use Livewire\Attributes\Layout;
+
+
 use Livewire\Component;
-use App\Models\Tournament;
 
 new #[Layout('layouts::publicview')]
     class extends Component {
-  
-
-
+    //
 };
 ?>
-<div class="">
 
+<div>
+    {{-- Simplicity is the essence of happiness. - Cedric Bledsoe --}}
 </div>

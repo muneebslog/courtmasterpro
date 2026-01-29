@@ -217,9 +217,11 @@ new class extends Component {
 
             $this->lastSetWinnerTeamId = $result['set_winner_team_id'];
 
-            // update scoreboard
-            $this->teamAWins = $this->match->setWinsForTeam($this->match->team_a_id);
-            $this->teamBWins = $this->match->setWinsForTeam($this->match->team_b_id);
+            $wins = $this->match->visualMatchWins();
+
+            $this->teamAWins = $wins['A'];
+            $this->teamBWins = $wins['B'];
+
 
             // pause the game
             $this->showSetWinnerModal = true;
@@ -279,10 +281,15 @@ new class extends Component {
 
     public function confirmStartNextSet()
     {
-        $maxSets = $this->match->round->event->best_of_sets;
-        if ($this->set->set_number >= $maxSets) {
-            return; // or throw an exception
+        $maxSets = $this->match->totalSetsAllowed();
+
+        if (
+            $this->set->set_number >= $maxSets ||
+            !$this->match->canContinuePlaying()
+        ) {
+            return;
         }
+
 
         $this->set = $this->match->sets()->create([
             'set_number' => $this->set->set_number + 1,
@@ -322,7 +329,7 @@ new class extends Component {
                     <flux:text class="mt-2">Verify match details before initiating live scoring.</flux:text>
                 </div>
                 <flux:input label="Umpire Name" wire:model="umpire_name" placeholder="Umpire Name" />
-                <flux:input label="Referee Name" wire:model="referee_name" placeholder="Referee Name" />
+                <flux:input label="Service Judge Name" wire:model="referee_name" placeholder="Referee Name" />
                 <div class="flex">
                     <flux:spacer />
                     <flux:button type="submit" variant="primary">Save changes</flux:button>
@@ -340,9 +347,15 @@ new class extends Component {
                         • {{ $match->round->name }}
                     </span>
 
+                    @php
+                        $visualMatch = intdiv($set->set_number - 1, 3) + 1;
+                        $visualSet = (($set->set_number - 1) % 3) + 1;
+                    @endphp
+
                     <span class="text-sm font-medium text-slate-500">
-                        Set {{ $set?->set_number }} of {{ $match->round->event->best_of_sets }}
+                        Match {{ $visualMatch }} – Set {{ $visualSet }}
                     </span>
+
                 </div>
 
                 {{-- CENTER: TEAMS --}}
@@ -357,20 +370,20 @@ new class extends Component {
                     @if ($match->status === 'live')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                                bg-green-100 text-green-700 border border-green-200">
+                                                                                                                                                                                                                                bg-green-100 text-green-700 border border-green-200">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
                             LIVE
                         </span>
                     @elseif ($match->status === 'completed')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                                bg-slate-100 text-slate-700 border border-slate-200">
+                                                                                                                                                                                                                                bg-slate-100 text-slate-700 border border-slate-200">
                             COMPLETED
                         </span>
                     @else
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                                bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                                                                                                                                                                                                                bg-yellow-100 text-yellow-700 border border-yellow-200">
                             NOT STARTED
                         </span>
                     @endif
@@ -517,8 +530,9 @@ new class extends Component {
 
                                     <flux:select label='Player (optional)' wire:model="actionPlayerId"
                                         class="w-full rounded-lg border-slate-300 text-sm
-                                                                                                                            focus:ring-blue-500 focus:border-blue-500
-                                                                                                                            disabled:bg-slate-100" :disabled="!$actionTeamId">
+                                                                                                                                            focus:ring-blue-500 focus:border-blue-500
+                                                                                                                                            disabled:bg-slate-100"
+                                        :disabled="!$actionTeamId">
                                         <flux:select.option value="">
                                             — Team Level Action —
                                         </flux:select.option>
@@ -733,9 +747,10 @@ new class extends Component {
                 {{-- Final sets won --}}
                 <p class="text-sm text-slate-500">
                     Final Result:
-                    {{ $match->setWinsForTeam($match->team_a_id) }}
+                    {{ $match->visualMatchWinsForTeam($match->team_a_id) }}
                     –
-                    {{ $match->setWinsForTeam($match->team_b_id) }}
+                    {{ $match->visualMatchWinsForTeam($match->team_b_id) }}
+
                 </p>
 
                 {{-- Action --}}

@@ -1,15 +1,15 @@
 <?php
 use Livewire\Attributes\Layout;
+
 use Livewire\Component;
-use App\Models\Tournament;
+
 
 new #[Layout('layouts::publicview')]
     class extends Component {
-  
-
-
+    //
 };
 ?>
-<div class="">
 
+<div>
+    {{-- Live as if you were to die tomorrow. Learn as if you were to live forever. - Mahatma Gandhi --}}
 </div>

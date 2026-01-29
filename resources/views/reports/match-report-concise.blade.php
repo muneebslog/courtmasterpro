@@ -98,7 +98,7 @@
             <strong>Umpire:</strong> {{ $match->umpire ?? '—' }}
         </td>
         <td>
-            <strong>Referee:</strong> {{ $match->referee ?? '—' }}
+            <strong>Service Judge:</strong> {{ $match->referee ?? '—' }}
         </td>
     </tr>
 </table>
@@ -185,7 +185,7 @@
         </td>
         <td class="center">
             ____________________<br>
-            Referee
+            Service Judge
         </td>
         <td class="right muted">
             Generated: {{ $generatedAt }}

@@ -53,7 +53,7 @@
                         class="flex items-center justify-center px-6 py-3 bg-[#1b1b18] text-white dark:bg-[#EDEDEC] dark:text-[#1b1b18] rounded-md font-medium transition-transform active:scale-95">
                         Officials Dashboard
                     </a>
-                    <a href="{{ url('viewer/matches') }}"
+                    <a href="{{ url('/viewer/tournaments') }}"
                         class="flex items-center justify-center px-6 py-3 border border-[#19140035] dark:border-[#3E3E3A] hover:bg-[#f4f4f4] dark:hover:bg-[#1e1e1d] rounded-md font-medium transition-colors">
                         View Matches
                     </a>

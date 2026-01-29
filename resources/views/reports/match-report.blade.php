@@ -124,7 +124,7 @@
             <td>{{ $match->umpire ?? '—' }}</td>
         </tr>
         <tr>
-            <th>Referee</th>
+            <th>Service Judge</th>
             <td>{{ $match->referee ?? '—' }}</td>
         </tr>
     </table>
@@ -247,7 +247,7 @@
         </td>
         <td class="text-center">
             ____________________<br>
-            Referee Signature
+            Service Judge Signature
         </td>
     </tr>
 </table>

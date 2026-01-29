@@ -148,7 +148,7 @@ new class extends Component {
                             </p>
 
                             <p class="text-sm text-gray-500">
-                                Referee:
+                                Service Judge:
                                 <span class="text-gray-900 font-medium">
                                     {{ $match->referee ?? '—' }}
                                 </span>

@@ -53,9 +53,23 @@ Route::livewire('/settings/roles', 'core.roles')
     ->middleware(['auth', 'verified'])
     ->name('roles');
 
-Route::livewire('viewer/matches', 'pages::viewer.matches')
-    ->middleware(['auth', 'verified'])
-    ->name('dashboard');
+
+
+Route::livewire('viewer/tournaments', 'pages::viewer.list-tournaments')
+    ->name('viewer.tournaments');
+
+Route::livewire('viewer/tournaments/{tournament}/events', 'pages::viewer.events')
+    ->name('viewer.events');
+
+Route::livewire('viewer/events/{event}/rounds', 'pages::viewer.rounds')
+    ->name('viewer.rounds');
+
+Route::livewire('viewer/rounds/{round}/matches', 'pages::viewer.matches')
+    ->name('viewer.matches');
+
+Route::livewire('viewer/matches/{match}/scoreboard', 'pages::viewer.scoreboard')
+    ->name('viewer.scoreboard');
+
 
 
 require __DIR__ . '/settings.php';
