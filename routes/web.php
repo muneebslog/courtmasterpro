@@ -7,9 +7,9 @@ use App\Http\Controllers\MatchReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    // return view('welcome');
+    return view('welcome');
     //redirect to login page
-    return redirect()->route('login');
+    // return redirect()->route('login');
 })->name('home');
 
 Route::view('dashboard', 'dashboard')
@@ -53,6 +53,9 @@ Route::livewire('/settings/roles', 'core.roles')
     ->middleware(['auth', 'verified'])
     ->name('roles');
 
+Route::livewire('viewer/matches', 'pages::viewer.matches')
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 
 require __DIR__ . '/settings.php';

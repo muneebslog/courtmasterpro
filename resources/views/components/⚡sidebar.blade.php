@@ -32,7 +32,7 @@ new class extends Component {
     @forelse ($sidebarTournaments as $tournament)
         <flux:sidebar.group expandable heading="{{ $tournament->name }}" class="ml-2">
             @forelse ($tournament->events as $event)
-                <flux:sidebar.item href="{{ route('events.show', $event) }}" :current="request()->routeIs('events.show')
+                <flux:sidebar.item href="{{ route('events.show', $event) }}" wire:navigate :current="request()->routeIs('events.show')
                                             && request()->route('event')?->id === $event->id">
                     {{ $event->name }}
                 </flux:sidebar.item>
