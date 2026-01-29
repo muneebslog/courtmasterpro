@@ -75,6 +75,23 @@ new class extends Component {
         return $user->isProjectOwner() || $user->hasRole('umpire') || $user->hasRole('admin');
     }
 
+
+    // Inside the 'new class extends Component' block
+
+    public function openEditMatch(int $matchId)
+    {
+        abort_unless($this->canManage(), 403);
+
+        $match = MatchGame::findOrFail($matchId);
+
+        $this->selectedMatchId = $match->id;
+        // Cast to string to ensure the <option value="..."> matches exactly
+        $this->teamAId = (string) $match->team_a_id;
+        $this->teamBId = (string) $match->team_b_id;
+        $this->isBye = $match->status === 'bye';
+
+        Flux::modal('assign-teams')->show();
+    }
     public function updateEvent()
     {
         abort_unless($this->canManage(), 403);
@@ -267,18 +284,16 @@ new class extends Component {
         $match = MatchGame::findOrFail($this->selectedMatchId);
 
         DB::transaction(function () use ($match) {
+            // 1. Identify the teams currently assigned to this match
+            $oldTeamIds = array_filter([$match->team_a_id, $match->team_b_id]);
 
-            // 🧹 UNASSIGN previously assigned teams (if editing)
-            Team::whereIn('id', array_filter([
-                $match->team_a_id,
-                $match->team_b_id,
-            ]))->update(['is_assigned' => false]);
+            // 2. Clear 'is_assigned' for the OLD teams to make them available again
+            if (!empty($oldTeamIds)) {
+                Team::whereIn('id', $oldTeamIds)->update(['is_assigned' => false]);
+            }
 
             if ($this->isBye) {
-
-                $this->validate([
-                    'teamAId' => 'required',
-                ]);
+                $this->validate(['teamAId' => 'required']);
 
                 $match->update([
                     'team_a_id' => $this->teamAId,
@@ -286,12 +301,10 @@ new class extends Component {
                     'status' => 'bye',
                 ]);
 
-                // ✅ assign only team A
-                Team::where('id', $this->teamAId)
-                    ->update(['is_assigned' => true]);
+                // 3. Mark the single new team as assigned
+                Team::where('id', $this->teamAId)->update(['is_assigned' => true]);
 
             } else {
-
                 $this->validate([
                     'teamAId' => 'required|different:teamBId',
                     'teamBId' => 'required',
@@ -303,20 +316,15 @@ new class extends Component {
                     'status' => 'scheduled',
                 ]);
 
-                // ✅ assign both teams
-                Team::whereIn('id', [
-                    $this->teamAId,
-                    $this->teamBId,
-                ])->update(['is_assigned' => true]);
+                // 4. Mark both new teams as assigned
+                Team::whereIn('id', [$this->teamAId, $this->teamBId])
+                    ->update(['is_assigned' => true]);
             }
         });
 
-        // Reset modal state
         $this->reset('selectedMatchId', 'teamAId', 'teamBId', 'isBye');
-
         Flux::modal('assign-teams')->close();
-
-        $this->loadEvent(); // refresh UI
+        $this->loadEvent();
     }
 
 
@@ -401,6 +409,7 @@ new class extends Component {
                             <div class="flex gap-3">
                                 @if ($this->canManage())
 
+
                                     @if ($this->canEditEvent())
                                         <flux:button variant="outline" wire:click="openEditEvent">
                                             Edit Event
@@ -468,18 +477,17 @@ new class extends Component {
                                     <button @click="activeRoundId = {{ $round->id }}"
                                         class="px-3 py-1.5 text-xs font-medium rounded-md transition"
                                         :class="activeRoundId === {{ $round->id }}
-                                                                                                                                                                                                                                                                        ? 'bg-[#2563EB] text-white'
-                                                                                                                                                                                                                                                                        : 'text-[#6B7280] hover:text-[#111827]'">
+                                                                                                                                                                                                                                                                                                                        ? 'bg-[#2563EB] text-white'
+                                                                                                                                                                                                                                                                                                                        : 'text-[#6B7280] hover:text-[#111827]'">
                                         {{ $round->short_name ?? Str::upper(Str::slug($round->name, '')) }}
                                     </button>
                                 @endforeach
                             </div>
 
 
-                            <button 
+                            <button
                                 class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-[#E5E7EB] bg-white rounded-lg hover:bg-gray-50">
-                                <span
-                                    x-text="'Get Data'"></span>
+                                <span x-text="'Get Data'"></span>
                             </button>
                         </div>
                     </div>
@@ -523,11 +531,14 @@ new class extends Component {
 
                                             <td class="px-6 py-4 text-sm">
                                                 <div class="flex flex-col">
-                                                    <span class="font-semibold">
-                                                        {{ $match->teamA?->players->pluck('first_name')->join(', ') }}
+                                                    <span class="text-[#42464e] font-semibold">
+                                                        {{ $match->teamA?->display_name ?? '' }}
                                                     </span>
-                                                    <span class="text-[#6B7280]">
-                                                        {{ $match->teamB?->players->pluck('first_name')->join(', ') }}
+                                                    <span>
+                                                        Vs
+                                                    </span>
+                                                    <span class="text-[#42464e] font-semibold">
+                                                        {{ $match->teamB?->display_name ?? '' }}
                                                     </span>
                                                 </div>
                                             </td>
@@ -537,16 +548,47 @@ new class extends Component {
                                             </td>
 
                                             <td class="px-6 py-4 text-sm font-medium">
-                                                @foreach ($match->sets as $set)
-                                                    {{ $set->scores->pluck('points')->join('-') }}
-                                                    @if (!$loop->last), @endif
-                                                @endforeach
+                                                @if($match->round->event->default_discipline === 'mixed')
+                                                    {{-- Display as 5 matches for mixed/team events --}}
+                                                    @php
+                                                        $groupedSets = $match->sets->groupBy(function ($set) {
+                                                            return ceil($set->set_number / 3);
+                                                        });
+                                                    @endphp
+
+                                                    @foreach($groupedSets as $matchNum => $setsInMatch)
+                                                        <span class="inline-block mr-2">
+                                                            <span class="text-xs text-slate-500">M{{ $matchNum }}:</span>
+                                                            @foreach($setsInMatch as $set)
+                                                                @php
+                                                                    $scores = $set->scores->pluck('points');
+                                                                    $displayScore = $scores->count() > 1
+                                                                        ? $scores->join('-')
+                                                                        : ($scores->first() ?? 0) . '-0';
+                                                                @endphp
+                                                                {{ $displayScore }}@if(!$loop->last), @endif
+                                                            @endforeach
+                                                        </span>
+                                                        @if(!$loop->last) <span class="text-slate-300">|</span> @endif
+                                                    @endforeach
+                                                @else
+                                                    {{-- Original display for singles/doubles --}}
+                                                    @foreach ($match->sets as $set)
+                                                        @php
+                                                            $scores = $set->scores->pluck('points');
+                                                            $displayScore = $scores->count() > 1
+                                                                ? $scores->join('-')
+                                                                : ($scores->first() ?? 0) . '-0';
+                                                        @endphp
+                                                        {{ $displayScore }}@if (!$loop->last), @endif
+                                                    @endforeach
+                                                @endif
                                             </td>
 
                                             <td class="px-6 py-4">
                                                 <span
                                                     class="px-2 py-1 text-[10px] font-bold rounded
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
                                                     {{ strtoupper($match->status) }}
                                                 </span>
                                             </td>
@@ -562,15 +604,15 @@ new class extends Component {
                                                             </flux:button>
                                                         @endif
                                                     @else
-                                                                                                            @if ($this->canManage())
+                                                        @if ($this->canManage())
 
-                                                        @if ($match->status == 'scheduled')
-
-                                                            <flux:button variant="primary" color="red" size="xs">
-                                                                Edit Match
-                                                            </flux:button>
+                                                            @if ($match->status == 'scheduled' || $match->status == 'bye')
+                                                                <flux:button variant="outline" size="xs"
+                                                                    wire:click="openEditMatch({{ $match->id }})">
+                                                                    Edit Match
+                                                                </flux:button>
+                                                            @endif
                                                         @endif
-                                                                                                                    @endif
 
                                                         @if ($match->status == 'scheduled')
 
@@ -663,16 +705,25 @@ new class extends Component {
                 </div>
 
                 {{-- TEAM A --}}
+                <div class="">
+                    <span class=" text-xs text-black font-semibold">
+                        <span class=" text-xs font-light lowercase text-blue-400">Previously Selected A Team </span>"
+                        {{ Team::find($teamAId)?->display_name ?? '' }}"
+                    </span>
 
-                <flux:select label="Team A" wire:model="teamAId">
-                    <flux:select.option value="">Select team</flux:select.option>
-                    @foreach ($this->assignableTeams as $team)
-                                    <flux:select.option value="{{ $team->id }}">
-                                        {{ $team->name
-                        ?? $team->players->pluck('first_name')->join(' & ') }}
-                                    </flux:select.option>
-                    @endforeach
-                </flux:select>
+                    <flux:select label="Team A" wire:model="teamAId">
+                        <flux:select.option wire:key="0" value="">Select team</flux:select.option>
+                        @foreach ($this->assignableTeams as $team)
+                            {{-- Ensure the value matches the type in your property --}}
+                            <flux:select.option wire:key="{{$team->id }}" value="{{ (string) $team->id }}">
+                                {{ $team->name ?? $team->players->pluck('first_name')->join(' & ') }}
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+
+                </div>
+
+
 
 
                 <flux:field variant="inline">
@@ -685,15 +736,22 @@ new class extends Component {
 
 
                 {{-- TEAM B --}}
-                <flux:select label="Team B" wire:model="teamBId" :disabled="$isBye" :invalid="$isBye">
-                    <flux:select.option value="">Select team</flux:select.option>
-                    @foreach ($this->assignableTeams as $team)
-                                    <flux:select.option value="{{ $team->id }}">
-                                        {{ $team->name
-                        ?? $team->players->pluck('first_name')->join(' & ') }}
-                                    </flux:select.option>
-                    @endforeach
-                </flux:select>
+                <div class="">
+                    <span class=" text-xs text-black font-semibold">
+                        <span class=" text-xs font-light lowercase text-blue-400">Previously Selected B Team </span>"
+                        {{ Team::find($teamBId)?->display_name ?? '' }}"
+                    </span>
+                    <flux:select label="Team B" wire:model="teamBId" :disabled="$isBye">
+                        <flux:select.option wire:key="0" value="">Select team</flux:select.option>
+                        @foreach ($this->assignableTeams as $team)
+                            <flux:select.option wire:key="{{$team->id }}" value="{{ (string) $team->id }}">
+                                {{ $team->name ?? $team->players->pluck('first_name')->join(' & ') }}
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+
+                </div>
+
 
 
                 <div class="flex pt-2">

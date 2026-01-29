@@ -25,13 +25,21 @@ class MatchReportController extends Controller
             ->where('status', 'completed')
             ->sortBy('set_number');
 
-        $teamAWins = $match->sets
-            ->where('winner_team_id', $match->team_a_id)
-            ->count();
+        // Calculate wins based on match type
+        if ($match->round->event->default_discipline === 'mixed') {
+            // For mixed/team: count visual match wins
+            $teamAWins = $match->visualMatchWinsForTeam($match->team_a_id);
+            $teamBWins = $match->visualMatchWinsForTeam($match->team_b_id);
+        } else {
+            // For singles/doubles: count set wins
+            $teamAWins = $match->sets
+                ->where('winner_team_id', $match->team_a_id)
+                ->count();
 
-        $teamBWins = $match->sets
-            ->where('winner_team_id', $match->team_b_id)
-            ->count();
+            $teamBWins = $match->sets
+                ->where('winner_team_id', $match->team_b_id)
+                ->count();
+        }
 
         $timelineEvents = $match->matchEvents
             ->whereIn('type', [
@@ -106,13 +114,21 @@ class MatchReportController extends Controller
             ->where('status', 'completed')
             ->sortBy('set_number');
 
-        $teamAWins = $match->sets
-            ->where('winner_team_id', $match->team_a_id)
-            ->count();
+        // Calculate wins based on match type
+        if ($match->round->event->default_discipline === 'mixed') {
+            // For mixed/team: count visual match wins
+            $teamAWins = $match->visualMatchWinsForTeam($match->team_a_id);
+            $teamBWins = $match->visualMatchWinsForTeam($match->team_b_id);
+        } else {
+            // For singles/doubles: count set wins
+            $teamAWins = $match->sets
+                ->where('winner_team_id', $match->team_a_id)
+                ->count();
 
-        $teamBWins = $match->sets
-            ->where('winner_team_id', $match->team_b_id)
-            ->count();
+            $teamBWins = $match->sets
+                ->where('winner_team_id', $match->team_b_id)
+                ->count();
+        }
 
         $incidents = $match->matchEvents
             ->whereIn('type', [

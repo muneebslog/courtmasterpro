@@ -77,27 +77,26 @@ class MatchService
         ];
     }
 
+  
+
     public function handleWalkover(MatchGame $match, Set $set, int $walkoverTeamId): array
     {
-        // Determine winner
-        $winnerTeamId = $walkoverTeamId === $match->team_a_id
-            ? $match->team_b_id
-            : $match->team_a_id;
+        $winnerTeamId = $walkoverTeamId === $match->team_a_id ? $match->team_b_id : $match->team_a_id;
 
-        // Close current set if still live
-        if ($set->status === 'live') {
-            $set->update([
+        // Close current set
+        $set->update(['status' => 'completed', 'winner_team_id' => $winnerTeamId]);
+
+        // Only end the WHOLE match if it's NOT mixed, or if the mixed wins are already decided
+        $isMixed = $match->round->event->default_discipline === 'mixed';
+
+        // If it's a regular match, or if it's mixed and someone just reached the visual match win threshold
+        if (!$isMixed) {
+            $match->update([
                 'status' => 'completed',
                 'winner_team_id' => $winnerTeamId,
+                'ended_at' => now(),
             ]);
         }
-
-        // End match
-        $match->update([
-            'status' => 'completed',
-            'winner_team_id' => $winnerTeamId,
-            'ended_at' => now(),
-        ]);
 
         // Log walkover
         MatchEvent::create([

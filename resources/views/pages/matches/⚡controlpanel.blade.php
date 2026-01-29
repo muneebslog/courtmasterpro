@@ -68,20 +68,56 @@ new class extends Component {
         }
 
         // ✅ CASE 3: MATCH LIVE → load current set
+        // ✅ CASE 3: MATCH LIVE → load current set
         $this->set = $this->match->sets()
             ->where('status', 'live')
-            ->firstOrCreate(
-                ['set_number' => 1],
-                ['status' => 'live']
-            );
+            ->first();
 
-        $this->scoreA = $this->set->scores()
-            ->where('team_id', $this->match->team_a_id)
-            ->value('points') ?? 0;
+        // If no live set exists, determine the correct next set number
+        if (!$this->set) {
+            $lastCompletedSet = $this->match->sets()
+                ->where('status', 'completed')
+                ->orderBy('set_number', 'desc')
+                ->first();
 
-        $this->scoreB = $this->set->scores()
-            ->where('team_id', $this->match->team_b_id)
-            ->value('points') ?? 0;
+            if ($lastCompletedSet) {
+                // Determine next set based on whether visual match is complete
+                if ($this->match->round->event->default_discipline === 'mixed') {
+                    $lastVisualMatch = $this->match->getVisualMatchNumber($lastCompletedSet->set_number);
+                    $matchStatus = $this->match->getVisualMatchStatus($lastVisualMatch);
+
+                    if ($matchStatus['is_complete']) {
+                        // Last visual match ended, jump to next match
+                        $nextSetNumber = $lastVisualMatch * 3 + 1;
+                    } else {
+                        // Continue in same visual match
+                        $nextSetNumber = $lastCompletedSet->set_number + 1;
+                    }
+                } else {
+                    // Singles/Doubles: simple increment
+                    $nextSetNumber = $lastCompletedSet->set_number + 1;
+                }
+            } else {
+                // No completed sets, start at set 1
+                $nextSetNumber = 1;
+            }
+
+            // Create the next set
+            $this->set = $this->match->sets()->create([
+                'set_number' => $nextSetNumber,
+                'status' => 'live',
+            ]);
+        }
+    }
+
+    public function getCurrentVisualMatch(): int
+    {
+        return $this->match->getVisualMatchNumber($this->set->set_number);
+    }
+
+    public function getCurrentSetInMatch(): int
+    {
+        return $this->match->getSetWithinVisualMatch($this->set->set_number);
     }
 
     public function getSetScore($set, int $teamId): int
@@ -281,29 +317,37 @@ new class extends Component {
 
     public function confirmStartNextSet()
     {
-        $maxSets = $this->match->totalSetsAllowed();
+        $this->showSetWinnerModal = false;
 
-        if (
-            $this->set->set_number >= $maxSets ||
-            !$this->match->canContinuePlaying()
-        ) {
-            return;
+        // Check if the current visual match is complete (someone won 2 sets)
+        if ($this->match->round->event->default_discipline === 'mixed') {
+            $currentVisualMatch = $this->match->getVisualMatchNumber($this->set->set_number);
+            $matchStatus = $this->match->getVisualMatchStatus($currentVisualMatch);
+
+            if ($matchStatus['is_complete']) {
+                // Visual match is over! Jump to the next match (skip remaining sets)
+                $nextSetNumber = $currentVisualMatch * 3 + 1; // Jump to next match's first set
+            } else {
+                // Continue within the same visual match
+                $nextSetNumber = $this->set->set_number + 1;
+            }
+        } else {
+            // Singles/Doubles: just increment normally
+            $nextSetNumber = $this->set->set_number + 1;
         }
 
-
+        // Create the next set
         $this->set = $this->match->sets()->create([
-            'set_number' => $this->set->set_number + 1,
-            'discipline' => $this->set->discipline,
+            'set_number' => $nextSetNumber,
             'status' => 'live',
         ]);
 
-        // 👇 RESET LIVEWIRE SCORE STATE
+        // Reset scores
         $this->scoreA = 0;
         $this->scoreB = 0;
 
-        $this->log('set_started', null, 'Set started');
-
-        $this->showSetWinnerModal = false;
+        // Log the new set started
+        $this->log('set_started', null, "Set {$nextSetNumber} started");
     }
 
 
@@ -347,14 +391,14 @@ new class extends Component {
                         • {{ $match->round->name }}
                     </span>
 
-                    @php
-                        $visualMatch = intdiv($set->set_number - 1, 3) + 1;
-                        $visualSet = (($set->set_number - 1) % 3) + 1;
-                    @endphp
-
-                    <span class="text-sm font-medium text-slate-500">
-                        Match {{ $visualMatch }} – Set {{ $visualSet }}
-                    </span>
+                    @if($match->round->event->default_discipline === 'mixed')
+                        <h2 class="text-2xl font-bold">Match {{ $this->getCurrentVisualMatch() }} of 5</h2>
+                        <p class="text-sm text-slate-500">Set {{ $this->getCurrentSetInMatch() }} of 3</p>
+                    @else
+                        <h2 class="text-2xl font-bold">Set {{ $this->set->set_number }} of
+                            {{ $match->round->event->best_of_sets }}
+                        </h2>
+                    @endif
 
                 </div>
 
@@ -370,20 +414,20 @@ new class extends Component {
                     @if ($match->status === 'live')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                                                bg-green-100 text-green-700 border border-green-200">
+                                                                                                                                                                                                                                                                    bg-green-100 text-green-700 border border-green-200">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
                             LIVE
                         </span>
                     @elseif ($match->status === 'completed')
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                                                bg-slate-100 text-slate-700 border border-slate-200">
+                                                                                                                                                                                                                                                                    bg-slate-100 text-slate-700 border border-slate-200">
                             COMPLETED
                         </span>
                     @else
                         <span
                             class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold
-                                                                                                                                                                                                                                bg-yellow-100 text-yellow-700 border border-yellow-200">
+                                                                                                                                                                                                                                                                    bg-yellow-100 text-yellow-700 border border-yellow-200">
                             NOT STARTED
                         </span>
                     @endif
@@ -530,8 +574,8 @@ new class extends Component {
 
                                     <flux:select label='Player (optional)' wire:model="actionPlayerId"
                                         class="w-full rounded-lg border-slate-300 text-sm
-                                                                                                                                            focus:ring-blue-500 focus:border-blue-500
-                                                                                                                                            disabled:bg-slate-100"
+                                                                                                                                                                                focus:ring-blue-500 focus:border-blue-500
+                                                                                                                                                                                disabled:bg-slate-100"
                                         :disabled="!$actionTeamId">
                                         <flux:select.option value="">
                                             — Team Level Action —
@@ -677,7 +721,11 @@ new class extends Component {
         <div class="space-y-4 text-center">
 
             <h2 class="text-xl font-bold">
-                Set Completed
+                @if($match->round->event->default_discipline === 'mixed')
+                    Set {{ $match->getSetWithinVisualMatch($lastSetWinnerTeamId ? $this->set->set_number : 1) }} Completed
+                @else
+                    Set Completed
+                @endif
             </h2>
 
             <p>
@@ -690,7 +738,11 @@ new class extends Component {
             </p>
 
             <p class="text-sm text-slate-500">
-                Sets: {{ $teamAWins }} – {{ $teamBWins }}
+                @if($match->round->event->default_discipline === 'mixed')
+                    Matches Won: {{ $teamAWins }} – {{ $teamBWins }}
+                @else
+                    Sets Won: {{ $teamAWins }} – {{ $teamBWins }}
+                @endif
             </p>
 
             <flux:button variant="primary" wire:click="confirmStartNextSet" class="w-full">
@@ -721,36 +773,62 @@ new class extends Component {
                 {{-- Set summary --}}
                 <div class="bg-slate-50 rounded-lg p-4 space-y-2">
                     <h3 class="font-semibold text-slate-700">
-                        Set Scores
+                        @if($match->round->event->default_discipline === 'mixed')
+                            Match Results
+                        @else
+                            Set Scores
+                        @endif
                     </h3>
                     @if (!empty($completedSets))
+                        @if($match->round->event->default_discipline === 'mixed')
+                            {{-- Group by visual matches for mixed events --}}
+                            @php
+                                $groupedSets = $completedSets->groupBy(fn($set) => ceil($set->set_number / 3));
+                            @endphp
 
-
-
-                        @foreach ($completedSets as $set)
-                            <div class="flex justify-between text-sm">
-                                <span>
-                                    Set {{ $set->set_number }}
-                                </span>
-
-                                <span class="font-mono font-semibold">
-                                    {{ $this->getSetScore($set, $match->team_a_id) }}
-                                    –
-                                    {{ $this->getSetScore($set, $match->team_b_id) }}
-                                </span>
-                            </div>
-                        @endforeach
+                            @foreach($groupedSets as $matchNum => $setsInMatch)
+                                <div class="mb-3 pb-2 border-b border-slate-200 last:border-0">
+                                    <p class="text-xs font-bold text-slate-600 mb-1">Match {{ $matchNum }}</p>
+                                    @foreach($setsInMatch as $set)
+                                        @php
+                                            $setInMatch = $set->set_number % 3 ?: 3;
+                                        @endphp
+                                        <div class="flex justify-between text-sm pl-3">
+                                            <span class="text-slate-500">Set {{ $setInMatch }}</span>
+                                            <span class="font-mono font-semibold">
+                                                {{ $this->getSetScore($set, $match->team_a_id) }}
+                                                –
+                                                {{ $this->getSetScore($set, $match->team_b_id) }}
+                                            </span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endforeach
+                        @else
+                            {{-- Original singles/doubles display --}}
+                            @foreach ($completedSets as $set)
+                                <div class="flex justify-between text-sm">
+                                    <span>Set {{ $set->set_number }}</span>
+                                    <span class="font-mono font-semibold">
+                                        {{ $this->getSetScore($set, $match->team_a_id) }}
+                                        –
+                                        {{ $this->getSetScore($set, $match->team_b_id) }}
+                                    </span>
+                                </div>
+                            @endforeach
+                        @endif
                     @endif
-
                 </div>
 
-                {{-- Final sets won --}}
                 <p class="text-sm text-slate-500">
-                    Final Result:
+                    @if($match->round->event->default_discipline === 'mixed')
+                        Final Matches Won:
+                    @else
+                        Final Sets Won:
+                    @endif
                     {{ $match->visualMatchWinsForTeam($match->team_a_id) }}
                     –
                     {{ $match->visualMatchWinsForTeam($match->team_b_id) }}
-
                 </p>
 
                 {{-- Action --}}

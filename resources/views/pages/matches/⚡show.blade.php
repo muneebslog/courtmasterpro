@@ -10,7 +10,7 @@ new class extends Component {
     public int $teamAWins = 0;
     public int $teamBWins = 0;
     public ?int $winnerTeamId = null;
-    
+
 
     public function mount($match)
     {
@@ -27,13 +27,21 @@ new class extends Component {
             ->where('status', 'completed')
             ->sortBy('set_number');
 
-        $this->teamAWins = $this->match->sets
-            ->where('winner_team_id', $this->match->team_a_id)
-            ->count();
+        // Calculate wins based on match type
+        if ($this->match->round->event->default_discipline === 'mixed') {
+            // For mixed/team: count visual match wins
+            $this->teamAWins = $this->match->visualMatchWinsForTeam($this->match->team_a_id);
+            $this->teamBWins = $this->match->visualMatchWinsForTeam($this->match->team_b_id);
+        } else {
+            // For singles/doubles: count set wins
+            $this->teamAWins = $this->match->sets
+                ->where('winner_team_id', $this->match->team_a_id)
+                ->count();
 
-        $this->teamBWins = $this->match->sets
-            ->where('winner_team_id', $this->match->team_b_id)
-            ->count();
+            $this->teamBWins = $this->match->sets
+                ->where('winner_team_id', $this->match->team_b_id)
+                ->count();
+        }
 
         $this->winnerTeamId = $this->match->winner_team_id;
     }
@@ -212,7 +220,13 @@ new class extends Component {
 
                 <section class="bg-white rounded-xl border-2 border-green-500 shadow-sm p-8">
                     <div class="text-center mb-6">
-                        <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-2">Final Result</h3>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-2">
+                            @if($match->round->event->default_discipline === 'mixed')
+                                Final Matches Won
+                            @else
+                                Final Result
+                            @endif
+                        </h3>
                         <div class="flex justify-center items-center gap-6">
                             <span class="text-5xl font-bold text-green-600">
                                 {{ $teamAWins }}
@@ -237,37 +251,98 @@ new class extends Component {
 
                     </div>
                     <div class="max-w-md mx-auto space-y-3">
-                        @foreach ($completedSets as $set)
-                                            @php
-                                                $a = $this->setScore($set, $match->team_a_id);
-                                                $b = $this->setScore($set, $match->team_b_id);
-                                                $winner = $set->winner_team_id === $match->team_a_id ? 'A' : 'B';
-                                            @endphp
+                        <div class="max-w-md mx-auto space-y-3">
+                            @if($match->round->event->default_discipline === 'mixed')
+                                {{-- Display as 5 matches for mixed/team events --}}
+                                @php
+                                    $groupedSets = $completedSets->groupBy(function ($set) {
+                                        return ceil($set->set_number / 3);
+                                    });
+                                @endphp
 
-                                            <div
-                                                class="flex justify-between items-center p-3
-                                                                                                                                                                                                                                                                                                {{ $winner === 'A'
-                            ? 'bg-green-50 border-green-100'
-                            : 'bg-gray-50 border-gray-100' }}
-                                                                                                                                                                                                                                                                                                rounded-lg border">
+                                @foreach($groupedSets as $matchNum => $setsInMatch)
+                                    @php
+                                        $matchStatus = $match->getVisualMatchStatus($matchNum);
+                                    @endphp
 
-                                                <span class="text-sm font-bold">
-                                                    Set {{ $set->set_number }}
-                                                </span>
+                                    {{-- Match Header --}}
+                                    <div
+                                        class="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-lg p-3 mb-2">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-sm font-bold text-indigo-900">Match {{ $matchNum }} of 5</span>
+                                            @if($matchStatus['is_complete'])
+                                                        <span
+                                                            class="text-xs font-bold px-2 py-1 rounded
+                                                {{ $matchStatus['winner'] === $match->team_a_id ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
+                                                            Winner: {{ $matchStatus['winner'] === $match->team_a_id ? 'A' : 'B' }}
+                                                        </span>
+                                            @endif
+                                        </div>
+                                    </div>
 
-                                                <div class="font-medium text-gray-900">
-                                                    {{ $match->teamA->display_name }}
-                                                    <span class="font-bold">{{ $a }}</span>
-                                                    –
-                                                    <span class="font-bold">{{ $b }}</span>
-                                                    {{ $match->teamB->display_name }}
+                                    {{-- Sets within this match --}}
+                                    @foreach($setsInMatch as $set)
+                                                @php
+                                                    $a = $this->setScore($set, $match->team_a_id);
+                                                    $b = $this->setScore($set, $match->team_b_id);
+                                                    $winner = $set->winner_team_id === $match->team_a_id ? 'A' : 'B';
+                                                    $setInMatch = $match->getSetWithinVisualMatch($set->set_number);
+                                                @endphp
+
+                                                <div class="flex justify-between items-center p-3 ml-4
+                                        {{ $winner === 'A' ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200' }}
+                                        rounded-lg border">
+
+                                                    <span class="text-sm font-bold">
+                                                        Set {{ $setInMatch }}
+                                                    </span>
+
+                                                    <div class="font-medium text-gray-900">
+                                                        {{ $match->teamA->display_name }}
+                                                        <span class="font-bold">{{ $a }}</span>
+                                                        –
+                                                        <span class="font-bold">{{ $b }}</span>
+                                                        {{ $match->teamB->display_name }}
+                                                    </div>
+
+                                                    <span class="text-xs font-bold uppercase">
+                                                        Winner {{ $winner }}
+                                                    </span>
                                                 </div>
+                                    @endforeach
+                                @endforeach
+                            @else
+                                {{-- Original singles/doubles display --}}
+                                @foreach ($completedSets as $set)
+                                                @php
+                                                    $a = $this->setScore($set, $match->team_a_id);
+                                                    $b = $this->setScore($set, $match->team_b_id);
+                                                    $winner = $set->winner_team_id === $match->team_a_id ? 'A' : 'B';
+                                                @endphp
 
-                                                <span class="text-xs font-bold uppercase">
-                                                    Winner {{ $winner }}
-                                                </span>
-                                            </div>
-                        @endforeach
+                                                <div class="flex justify-between items-center p-3
+                                    {{ $winner === 'A' ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100' }}
+                                    rounded-lg border">
+
+                                                    <span class="text-sm font-bold">
+                                                        Set {{ $set->set_number }}
+                                                    </span>
+
+                                                    <div class="font-medium text-gray-900">
+                                                        {{ $match->teamA->display_name }}
+                                                        <span class="font-bold">{{ $a }}</span>
+                                                        –
+                                                        <span class="font-bold">{{ $b }}</span>
+                                                        {{ $match->teamB->display_name }}
+                                                    </div>
+
+                                                    <span class="text-xs font-bold uppercase">
+                                                        Winner {{ $winner }}
+                                                    </span>
+                                                </div>
+                                @endforeach
+                            @endif
+                        </div>
 
                     </div>
                 </section>
@@ -283,14 +358,14 @@ new class extends Component {
                                                                 <div class="flex gap-6 items-start">
                                                                     <div
                                                                         class="w-6 h-6 rounded-full
-                                                                                                                                                                                                                                                                                                                                                                                                                                        {{ match ($event->type) {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        {{ match ($event->type) {
                                         'match_started' => 'bg-blue-600 ring-4 ring-blue-50',
                                         'match_ended' => 'bg-green-600 ring-4 ring-green-50',
                                         'yellow_card' => 'bg-yellow-400',
                                         'red_card' => 'bg-red-600',
                                         default => 'bg-gray-300'
                                     } }}
-                                                                                                                                                                                                                                                                                                                                                                                                                                        z-10">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        z-10">
                                                                     </div>
 
                                                                     <div>

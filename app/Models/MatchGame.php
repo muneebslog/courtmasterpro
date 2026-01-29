@@ -117,21 +117,29 @@ class MatchGame extends Model
         return 1;
     }
 
+
+
+
+
     public function visualMatchWinsForTeam(int $teamId): int
     {
         $wins = 0;
 
-        $groupedSets = $this->sets
-            ->sortBy('set_no')
-            ->chunk($this->setsPerVisualMatch());
+        // Logic for Singles/Doubles (Best of 3 sets)
+        if ($this->round->event->default_discipline !== 'mixed') {
+            $setWins = $this->sets->where('winner_team_id', $teamId)->count();
+            return ($setWins >= 2) ? 1 : 0;
+        }
 
-        foreach ($groupedSets as $visualMatchSets) {
-            $setWins = $visualMatchSets
-                ->where('winner_team_id', $teamId)
-                ->count();
+        // Logic for Mixed/Team (Multiple Visual Matches)
+        // We group sets: 1-3, 4-6, 7-9, 10-12, 13-15
+        $groupedSets = $this->sets->groupBy(function ($set) {
+            return ceil($set->set_number / 3);
+        });
 
-            // visual match = best of 3 → first to 2
-            if ($setWins >= 2) {
+        foreach ($groupedSets as $visualMatchIndex => $setsInThisMatch) {
+            $winsInThisMatch = $setsInThisMatch->where('winner_team_id', $teamId)->count();
+            if ($winsInThisMatch >= 2) {
                 $wins++;
             }
         }
@@ -153,6 +161,68 @@ class MatchGame extends Model
         return [
             'A' => $this->visualMatchWinsForTeam($this->team_a_id),
             'B' => $this->visualMatchWinsForTeam($this->team_b_id),
+        ];
+    }
+
+    /**
+     * Get which visual match (1-5) a set number belongs to
+     * For mixed: set 1-3 = match 1, set 4-6 = match 2, etc.
+     * For singles/doubles: always returns 1
+     */
+    public function getVisualMatchNumber(int $setNumber): int
+    {
+        if ($this->round->event->default_discipline !== 'mixed') {
+            return 1; // Singles/Doubles only have 1 match
+        }
+        return (int) ceil($setNumber / 3);
+    }
+
+    /**
+     * Get which set (1-3) within the current visual match
+     * For mixed: set 4 → returns 1, set 5 → returns 2, set 6 → returns 3
+     * For singles/doubles: returns the actual set number
+     */
+    public function getSetWithinVisualMatch(int $setNumber): int
+    {
+        if ($this->round->event->default_discipline !== 'mixed') {
+            return $setNumber; // Return actual set number for Singles/Doubles
+        }
+        $remainder = $setNumber % 3;
+        return $remainder === 0 ? 3 : $remainder;
+    }
+
+    /**
+     * Get the status of a specific visual match (1-5)
+     * Returns how many sets each team won in that match
+     */
+    public function getVisualMatchStatus(int $matchNumber): array
+    {
+        if ($this->round->event->default_discipline !== 'mixed') {
+            // For singles/doubles, just return overall set wins
+            return [
+                'team_a_wins' => $this->setWinsForTeam($this->team_a_id),
+                'team_b_wins' => $this->setWinsForTeam($this->team_b_id),
+                'winner' => $this->winner_team_id,
+                'is_complete' => $this->status === 'completed',
+            ];
+        }
+
+        // Get sets for this visual match: 1-3, 4-6, 7-9, 10-12, or 13-15
+        $startSet = ($matchNumber - 1) * 3 + 1;
+        $endSet = $matchNumber * 3;
+
+        $setsInMatch = $this->sets()
+            ->whereBetween('set_number', [$startSet, $endSet])
+            ->get();
+
+        $teamAWins = $setsInMatch->where('winner_team_id', $this->team_a_id)->count();
+        $teamBWins = $setsInMatch->where('winner_team_id', $this->team_b_id)->count();
+
+        return [
+            'team_a_wins' => $teamAWins,
+            'team_b_wins' => $teamBWins,
+            'winner' => $teamAWins >= 2 ? $this->team_a_id : ($teamBWins >= 2 ? $this->team_b_id : null),
+            'is_complete' => $teamAWins >= 2 || $teamBWins >= 2,
         ];
     }
 }

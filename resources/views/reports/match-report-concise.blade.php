@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <title>Match Summary Report</title>
@@ -26,7 +27,8 @@
             margin-top: 6px;
         }
 
-        th, td {
+        th,
+        td {
             border: 1px solid #ccc;
             padding: 5px;
             text-align: left;
@@ -58,140 +60,187 @@
 
 <body>
 
-{{-- HEADER --}}
-<h1>
-    {{ $match->round->event->tournament->name }}
-</h1>
+    {{-- HEADER --}}
+    <h1>
+        {{ $match->round->event->tournament->name }}
+    </h1>
 
-<p class="muted">
-    {{ $match->round->event->name }}
-    — {{ $match->round->name }}
-    | Match #{{ $match->id }}
-    @if($match->court_no) | Court {{ $match->court_no }} @endif
-    | {{ ucfirst($match->status) }}
-</p>
+    <p class="muted">
+        {{ $match->round->event->name }}
+        — {{ $match->round->name }}
+        | Match #{{ $match->id }}
+        @if($match->court_no) | Court {{ $match->court_no }} @endif
+        | {{ ucfirst($match->status) }}
+    </p>
 
-<hr>
+    <hr>
 
-{{-- TEAMS & OFFICIALS --}}
-<table class="no-border">
-    <tr>
-        <td width="50%">
-            <strong>Team A:</strong>
-            {{ $match->teamA->display_name }}
-            <br>
-            <span class="muted">
-                {{ $match->teamA->players->pluck('first_name')->join(', ') }}
-            </span>
-        </td>
-        <td width="50%">
-            <strong>Team B:</strong>
-            {{ $match->teamB->display_name }}
-            <br>
-            <span class="muted">
-                {{ $match->teamB->players->pluck('first_name')->join(', ') }}
-            </span>
-        </td>
-    </tr>
-    <tr>
-        <td>
-            <strong>Umpire:</strong> {{ $match->umpire ?? '—' }}
-        </td>
-        <td>
-            <strong>Service Judge:</strong> {{ $match->referee ?? '—' }}
-        </td>
-    </tr>
-</table>
-
-{{-- RESULT --}}
-<div class="section">
-    <strong>Winner:</strong>
-    {{ $match->winner_team_id === $match->team_a_id
-        ? $match->teamA->display_name
-        : $match->teamB->display_name }}
-
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-
-    <strong>Final Result:</strong>
-    {{ $teamAWins }} – {{ $teamBWins }}
-</div>
-
-{{-- SET SCORES --}}
-<div class="section">
-    <table>
+    {{-- TEAMS & OFFICIALS --}}
+    <table class="no-border">
         <tr>
-            <th width="15%">Set</th>
-            <th width="25%">{{ $match->teamA->display_name }}</th>
-            <th width="25%">{{ $match->teamB->display_name }}</th>
-            <th width="15%">Winner</th>
-        </tr>
-
-        @foreach ($completedSets as $set)
-        <tr>
-            <td class="center">Set {{ $set->set_number }}</td>
-            <td class="center">
-                {{ $set->scores->firstWhere('team_id', $match->team_a_id)?->points ?? 0 }}
+            <td width="50%">
+                <strong>Team A:</strong>
+                {{ $match->teamA->display_name }}
+                <br>
+                <span class="muted">
+                    {{ $match->teamA->players->pluck('first_name')->join(', ') }}
+                </span>
             </td>
-            <td class="center">
-                {{ $set->scores->firstWhere('team_id', $match->team_b_id)?->points ?? 0 }}
-            </td>
-            <td class="center">
-                {{ $set->winner_team_id === $match->team_a_id ? 'A' : 'B' }}
+            <td width="50%">
+                <strong>Team B:</strong>
+                {{ $match->teamB->display_name }}
+                <br>
+                <span class="muted">
+                    {{ $match->teamB->players->pluck('first_name')->join(', ') }}
+                </span>
             </td>
         </tr>
-        @endforeach
+        <tr>
+            <td>
+                <strong>Umpire:</strong> {{ $match->umpire ?? '—' }}
+            </td>
+            <td>
+                <strong>Service Judge:</strong> {{ $match->referee ?? '—' }}
+            </td>
+        </tr>
     </table>
-</div>
 
-{{-- INCIDENTS --}}
-<div class="section">
-    <strong>Incidents:</strong>
-    @if ($incidents->isEmpty())
-        None
-    @else
-        <table>
-            <tr>
-                <th>Type</th>
-                <th>Player / Team</th>
-                <th>Set</th>
-            </tr>
-            @foreach ($incidents as $incident)
-            <tr>
-                <td>{{ strtoupper(str_replace('_',' ', $incident->type)) }}</td>
-                <td>{{ $incident->player?->first_name ?? 'Team Level' }}</td>
-                <td>{{ $incident->set?->set_number ?? '—' }}</td>
-            </tr>
+    {{-- RESULT --}}
+    <div class="section">
+        <strong>Winner:</strong>
+        {{ $match->winner_team_id === $match->team_a_id
+    ? $match->teamA->display_name
+    : $match->teamB->display_name }}
+
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+
+        @if($match->round->event->default_discipline === 'mixed')
+            <strong>Final Matches:</strong>
+        @else
+            <strong>Final Result:</strong>
+        @endif
+        {{ $teamAWins }} – {{ $teamBWins }}
+    </div>
+
+    {{-- SET SCORES --}}
+    <div class="section">
+        @if($match->round->event->default_discipline === 'mixed')
+            {{-- Display as 5 matches for mixed/team events --}}
+            @php
+                $groupedSets = $completedSets->groupBy(function ($set) {
+                    return ceil($set->set_number / 3);
+                });
+            @endphp
+
+            @foreach($groupedSets as $matchNum => $setsInMatch)
+                <strong style="display: block; margin-top: 8px; margin-bottom: 4px;">
+                    Match {{ $matchNum }}
+                </strong>
+                <table>
+                    <tr>
+                        <th width="15%">Set</th>
+                        <th width="25%">{{ $match->teamA->display_name }}</th>
+                        <th width="25%">{{ $match->teamB->display_name }}</th>
+                        <th width="15%">Winner</th>
+                    </tr>
+
+                    @foreach($setsInMatch as $set)
+                        @php
+                            $setInMatch = $match->getSetWithinVisualMatch($set->set_number);
+                        @endphp
+                        <tr>
+                            <td class="center">Set {{ $setInMatch }}</td>
+                            <td class="center">
+                                {{ $set->scores->firstWhere('team_id', $match->team_a_id)?->points ?? 0 }}
+                            </td>
+                            <td class="center">
+                                {{ $set->scores->firstWhere('team_id', $match->team_b_id)?->points ?? 0 }}
+                            </td>
+                            <td class="center">
+                                {{ $set->winner_team_id === $match->team_a_id ? 'A' : 'B' }}
+                            </td>
+                        </tr>
+                    @endforeach
+                </table>
             @endforeach
-        </table>
-    @endif
-</div>
+        @else
+            {{-- Original singles/doubles display --}}
+            <table>
+                <tr>
+                    <th width="15%">Set</th>
+                    <th width="25%">{{ $match->teamA->display_name }}</th>
+                    <th width="25%">{{ $match->teamB->display_name }}</th>
+                    <th width="15%">Winner</th>
+                </tr>
 
-{{-- METADATA --}}
-<div class="section muted">
-    Duration: {{ $duration }}
-    • Scheduled: {{ optional($match->scheduled_at)->format('H:i') ?? '—' }}
-    • Start: {{ optional($match->started_at)->format('H:i') ?? '—' }}
-    • End: {{ optional($match->ended_at)->format('H:i') ?? '—' }}
-    • Shuttles: {{ $match->shuttlecock_used_count }}
-</div>
+                @foreach ($completedSets as $set)
+                    <tr>
+                        <td class="center">Set {{ $set->set_number }}</td>
+                        <td class="center">
+                            {{ $set->scores->firstWhere('team_id', $match->team_a_id)?->points ?? 0 }}
+                        </td>
+                        <td class="center">
+                            {{ $set->scores->firstWhere('team_id', $match->team_b_id)?->points ?? 0 }}
+                        </td>
+                        <td class="center">
+                            {{ $set->winner_team_id === $match->team_a_id ? 'A' : 'B' }}
+                        </td>
+                    </tr>
+                @endforeach
+            </table>
+        @endif
+    </div>
 
-<br><br>
+    {{-- INCIDENTS --}}
+    <div class="section">
+        <strong>Incidents:</strong>
+        @if ($incidents->isEmpty())
+            None
+        @else
+            <table>
+                <tr>
+                    <th>Type</th>
+                    <th>Player / Team</th>
+                    <th>Set</th>
+                </tr>
+                @foreach ($incidents as $incident)
+                    <tr>
+                        <td>{{ strtoupper(str_replace('_', ' ', $incident->type)) }}</td>
+                        <td>{{ $incident->player?->first_name ?? 'Team Level' }}</td>
+                        <td>{{ $incident->set?->set_number ?? '—' }}</td>
+                    </tr>
+                @endforeach
+            </table>
+        @endif
+    </div>
 
-<table width="100%" class="no-border">
-    <tr>
-        <td class="center">
-            ____________________<br>
-            Umpire
-        </td>
-        <td class="center">
-            ____________________<br>
-            Service Judge
-        </td>
-        <td class="right muted">
-            Generated: {{ $generatedAt }}
-        </td>
-    </tr>
-</table>
+    {{-- METADATA --}}
+    <div class="section muted">
+        Duration: {{ $duration }}
+        • Scheduled: {{ optional($match->scheduled_at)->format('H:i') ?? '—' }}
+        • Start: {{ optional($match->started_at)->format('H:i') ?? '—' }}
+        • End: {{ optional($match->ended_at)->format('H:i') ?? '—' }}
+        • Shuttles: {{ $match->shuttlecock_used_count }}
+    </div>
+
+    <br><br>
+
+    <table width="100%" class="no-border">
+        <tr>
+            <td class="center">
+                ____________________<br>
+                Umpire
+            </td>
+            <td class="center">
+                ____________________<br>
+                Service Judge
+            </td>
+            <td class="right muted">
+                Generated: {{ $generatedAt }}
+            </td>
+        </tr>
+    </table>
 
 </body>
+
 </html>
