@@ -329,6 +329,67 @@ new class extends Component {
 
 
 
+    public function syncRoundWinners(int $currentRoundId)
+    {
+        abort_unless($this->canManage(), 403);
+
+        $currentRound = Round::with('matches')->findOrFail($currentRoundId);
+
+        // 1. Find the previous round in this event
+        $previousRound = Round::where('event_id', $this->event->id)
+            ->where('order_no', $currentRound->order_no - 1)
+            ->with('matches')
+            ->first();
+
+        if (!$previousRound) {
+            $this->addError('sync', 'No previous round found to pull data from.');
+            return;
+        }
+
+        // 2. Check if all previous matches are finished
+        $unfinished = $previousRound->matches->whereNotIn('status', ['completed', 'bye'])->count();
+        if ($unfinished > 0) {
+            $this->addError('sync', "Previous round ({$previousRound->name}) is not fully completed yet.");
+            return;
+        }
+
+        DB::transaction(function () use ($currentRound, $previousRound) {
+            // 3. Get winners from the previous round sorted by match_no
+            $winners = $previousRound->matches->sortBy('match_no')->map(function ($match) {
+                // Handle Bye status (Team A is the automatic winner)
+                if ($match->status === 'bye')
+                    return $match->team_a_id;
+                // Handle completed match
+                return $match->winner_team_id;
+            })->values();
+
+            // 4. Assign winners to the current round
+            // Every 2 winners from previous round form 1 match in current round
+            foreach ($currentRound->matches->sortBy('match_no') as $index => $match) {
+                $teamAIndex = $index * 2;
+                $teamBIndex = ($index * 2) + 1;
+
+                $newTeamAId = $winners[$teamAIndex] ?? null;
+                $newTeamBId = $winners[$teamBIndex] ?? null;
+
+                // Only update if teams have changed and match isn't live/done
+                if ($match->status === 'scheduled') {
+                    $match->update([
+                        'team_a_id' => $newTeamAId,
+                        'team_b_id' => $newTeamBId,
+                    ]);
+
+                    // Update Team 'is_assigned' status
+                    if ($newTeamAId)
+                        Team::where('id', $newTeamAId)->update(['is_assigned' => true]);
+                    if ($newTeamBId)
+                        Team::where('id', $newTeamBId)->update(['is_assigned' => true]);
+                }
+            }
+        });
+
+        $this->loadEvent(); // Refresh UI
+    }
 
     protected function loadEvent()
     {
@@ -463,8 +524,10 @@ new class extends Component {
 
 
                 <div x-show="viewTab === 'matches'" wire:key="event-matches-{{ $renderKey }}"
-                    x-data="{ viewMode: 'table', activeRoundId: {{ $event->rounds->first()->id ?? 'null' }} }">
-
+                    x-data="{ viewMode: 'table', activeRoundId: {{ $event->rounds->first()->id ?? 'null' }} , activeRoundOrder: {{ $event->rounds->first()->order_no ?? 1 }} }">
+                    @error('sync')
+                        <p class="text-xs text-red-600 mt-2 font-medium">{{ $message }}</p>
+                    @enderror
                     <div class="flex justify-between items-end mb-6">
                         <div>
                             <h2 class="text-xl font-semibold text-[#111827]">Matches</h2>
@@ -474,21 +537,21 @@ new class extends Component {
                             <div x-show="viewMode === 'table'" x-transition
                                 class="flex bg-white border border-[#E5E7EB] p-1 rounded-lg">
                                 @foreach ($event->rounds as $round)
-                                    <button @click="activeRoundId = {{ $round->id }}"
-                                        class="px-3 py-1.5 text-xs font-medium rounded-md transition"
-                                        :class="activeRoundId === {{ $round->id }}
-                                                                                                                                                                                                                                                                                                                        ? 'bg-[#2563EB] text-white'
-                                                                                                                                                                                                                                                                                                                        : 'text-[#6B7280] hover:text-[#111827]'">
-                                        {{ $round->short_name ?? Str::upper(Str::slug($round->name, '')) }}
-                                    </button>
+                                                    <button {{-- COMBINE THE CLICKS HERE --}}
+                                                        @click="activeRoundId = {{ $round->id }}; activeRoundOrder = {{ $round->order_no }}"
+                                                        class="px-3 py-1.5 text-xs font-medium rounded-md transition" :class="activeRoundId === {{ $round->id }} 
+                                    ? 'bg-[#2563EB] text-white' 
+                                    : 'text-[#6B7280] hover:text-[#111827]'">
+                                                        {{ $round->short_name ?? Str::upper(Str::slug($round->name, '')) }}
+                                                    </button>
                                 @endforeach
                             </div>
 
 
-                            <button
-                                class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-[#E5E7EB] bg-white rounded-lg hover:bg-gray-50">
-                                <span x-text="'Get Data'"></span>
-                            </button>
+                            <flux:button x-cloak @click="$wire.syncRoundWinners(activeRoundId);" icon="arrow-path"
+                                x-show="activeRoundOrder != {{ 1 }}">
+                                Get Data
+                            </flux:button>
                         </div>
                     </div>
 
@@ -588,7 +651,7 @@ new class extends Component {
                                             <td class="px-6 py-4">
                                                 <span
                                                     class="px-2 py-1 text-[10px] font-bold rounded
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
                                                     {{ strtoupper($match->status) }}
                                                 </span>
                                             </td>
@@ -599,7 +662,8 @@ new class extends Component {
                                                     @if ($match->team_a_id == null && $match->team_b_id == null)
                                                         @if ($this->canManage())
 
-                                                            <flux:button size="xs" wire:click="openAssignTeamsModal({{ $match->id }})">
+                                                            <flux:button x-show="activeRoundOrder == {{ 1 }}" size="xs"
+                                                                wire:click="openAssignTeamsModal({{ $match->id }})">
                                                                 Assign Teams
                                                             </flux:button>
                                                         @endif
@@ -607,7 +671,7 @@ new class extends Component {
                                                         @if ($this->canManage())
 
                                                             @if ($match->status == 'scheduled' || $match->status == 'bye')
-                                                                <flux:button variant="outline" size="xs"
+                                                                <flux:button variant="outline" size="xs" x-show="activeRoundOrder === {{ 1 }}"
                                                                     wire:click="openEditMatch({{ $match->id }})">
                                                                     Edit Match
                                                                 </flux:button>
