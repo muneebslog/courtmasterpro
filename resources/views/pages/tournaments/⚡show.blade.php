@@ -67,7 +67,7 @@ new class extends Component {
         $this->validate([
             'edit_name' => ['required', 'string', 'max:255'],
             'edit_location' => ['nullable', 'string', 'max:255'],
-            'edit_status' => ['required', 'in:upcoming,live,completed'],
+            'edit_status' => ['required', 'in:draft,live,completed'],
             'edit_start_date' => ['required', 'date'],
             'edit_end_date' => ['required', 'date', 'after_or_equal:edit_start_date'],
         ]);
