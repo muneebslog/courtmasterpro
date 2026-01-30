@@ -10,6 +10,7 @@ new #[Layout('layouts::publicview')]
     public function mount()
     {
         $this->tournaments = Tournament::query()
+            ->whereNot('status', 'draft')
             ->orderBy('start_date', 'desc')
             ->get();
     }
@@ -35,15 +36,13 @@ new #[Layout('layouts::publicview')]
                     onmouseover="this.style.backgroundColor='#111827'" onmouseout="this.style.backgroundColor='#0F1621'">
                     <div>
                         <div style="font-size: 18px; font-weight: 600; color: #F9FAFB; margin-bottom: 4px;">{{ $tournament->name }}</div>
-                        <div style="font-size: 14px; color: #D1D5DB;"> {{ $tournament->location }}</div>
+                        <div style="font-size: 14px; color: #d1dbd5;"> {{ $tournament->location }}</div>
                         <div style="font-size: 12px; color: #9CA3AF; margin-top: 4px;">{{ $tournament->start_date?->format('M d') }} – {{ $tournament->end_date?->format('M d, Y') }}</div>
                     </div>
-                @if ($tournament->start_date <= now() && $tournament->end_date >= now())
                     <div
-                        style="border: 1px solid #22C55E; color: #22C55E; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
-                        Live
+                        style="border: 1px solid {{ $tournament->status=='live' ? '#22C55E' :  '#ffc107' }};  color: {{ $tournament->status=='live' ? '#22C55E' :  '#ffc107' }}; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+                        {{ $tournament->status }}
                     </div>
-                @endif
                 </a>
             @empty
                 <div style="color: #9CA3AF; text-align: center; padding: 40px 0;">
