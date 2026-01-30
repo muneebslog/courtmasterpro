@@ -190,8 +190,8 @@ new class extends Component {
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     @if ($this->canManageTournament())
 
-                        <flux:modal.trigger name="create-tournament">
-                            <button
+                        
+                            <button wire:model="$set('newTournamentModal', true)"
                                 class="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors group">
                                 <svg class="w-8 h-8 mb-2 group-hover:scale-110 transition-transform" fill="none"
                                     stroke="currentColor" viewBox="0 0 24 24">
@@ -200,7 +200,7 @@ new class extends Component {
                                 </svg>
                                 <span class="font-medium">Add New Tournament</span>
                             </button>
-                        </flux:modal.trigger>
+                  
                     @endif
 
                     @forelse ($tournaments as $tournament)
