@@ -194,7 +194,11 @@ new class extends Component {
 
                         {{-- PLAYERS --}}
                         <td class="px-6 py-4 text-sm text-slate-600">
+                            @if($event->type === 'individual')
+                                {{ $team->players->first()->first_name.' '.$team->players->first()->last_name }}
+                            @else
                             {{ $team->players->pluck('first_name')->join(', ') }}
+                            @endif
                         </td>
 
                         {{-- ASSIGNED --}}
