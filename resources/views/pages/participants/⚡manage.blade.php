@@ -189,8 +189,7 @@ new class extends Component {
                     <tr>
                         {{-- TEAM LABEL --}}
                         <td class="px-6 py-4 font-medium">
-                            {{ $team->name
-                                ?? $team->players->pluck('first_name')->join(' & ') }}
+                            {{ $team->name ?? 'Not a Team' }}
                         </td>
 
                         {{-- PLAYERS --}}
