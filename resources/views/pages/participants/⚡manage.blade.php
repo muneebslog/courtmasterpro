@@ -179,6 +179,7 @@ new class extends Component {
         <table class="w-full text-left">
             <thead class="bg-slate-50 border-b">
                 <tr>
+                    <th class="px-6 py-3 text-xs uppercase">#</th>
                     <th class="px-6 py-3 text-xs uppercase">Team</th>
                     <th class="px-6 py-3 text-xs uppercase">Players</th>
                     <th class="px-6 py-3 text-xs uppercase">Tag</th>
@@ -188,8 +189,11 @@ new class extends Component {
             </thead>
 
             <tbody class="divide-y">
-                @forelse ($this->teams as $team)
+                @forelse ($this->teams as $i => $team)
                     <tr>
+                         <td class="px-6 py-4 font-medium">
+                            {{ $i + 1 }}
+                        </td>
                         {{-- TEAM LABEL --}}
                         <td class="px-6 py-4 font-medium">
                             {{ $team->name ?? 'Not a Team' }}
