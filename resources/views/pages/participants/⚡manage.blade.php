@@ -286,7 +286,7 @@ new class extends Component {
                         <flux:input
                             placeholder="Tag"
                             wire:model.defer="players.{{ $index }}.tag"
-                            class=""
+                            class="flex-1"
                         />
 
 
