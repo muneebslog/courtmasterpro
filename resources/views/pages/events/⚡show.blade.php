@@ -563,7 +563,7 @@ new class extends Component {
                     </div>
 
                     <div x-show="viewMode === 'table'"
-                        class="bg-white border border-[#E5E7EB] rounded-xl overflow-y-scroll custom-shadow">
+                        class="bg-white border border-[#E5E7EB] rounded-xl overflow-x-scroll custom-shadow">
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-slate-50 border-b border-[#E5E7EB]">
                                 <tr>
