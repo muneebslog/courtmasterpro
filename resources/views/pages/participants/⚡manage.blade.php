@@ -85,6 +85,7 @@ new class extends Component {
             ->map(fn ($p) => [
                 'first_name' => $p->first_name,
                 'last_name' => $p->last_name,
+                'tag' => $p->country,
                 'id' => $p->id,
             ])
             ->toArray();
@@ -98,7 +99,7 @@ new class extends Component {
 
     public function addPlayer()
     {
-        $this->players[] = ['first_name' => '', 'last_name' => ''];
+        $this->players[] = ['first_name' => '', 'tag' => ''];
     }
 
     public function removePlayer(int $index)
@@ -144,6 +145,7 @@ new class extends Component {
                 $player = Player::create([
                     'first_name' => $playerData['first_name'],
                     'last_name' => $playerData['last_name'] ?? null,
+                    'country' => $playerData['tag'] ?? null,
                 ]);
 
                 $team->players()->attach($player->id);
@@ -179,6 +181,7 @@ new class extends Component {
                 <tr>
                     <th class="px-6 py-3 text-xs uppercase">Team</th>
                     <th class="px-6 py-3 text-xs uppercase">Players</th>
+                    <th class="px-6 py-3 text-xs uppercase">Tag</th>
                     <th class="px-6 py-3 text-xs uppercase">Assigned</th>
                     <th class="px-6 py-3 text-xs uppercase text-right">Actions</th>
                 </tr>
@@ -196,6 +199,14 @@ new class extends Component {
                         <td class="px-6 py-4 text-sm text-slate-600">
                             @if($event->type === 'individual')
                                 {{ $team->players->first()->first_name.' '.$team->players->first()->last_name }}
+                            @else
+                            {{ $team->players->pluck('first_name')->join(', ') }}
+                            @endif
+                        </td>
+                        {{-- PLAYERS --}}
+                        <td class="px-6 py-4 text-sm text-slate-600">
+                            @if($event->type === 'individual')
+                                {{ $team->players->first()->country}}
                             @else
                             {{ $team->players->pluck('first_name')->join(', ') }}
                             @endif
@@ -267,6 +278,14 @@ new class extends Component {
                             wire:model.defer="players.{{ $index }}.last_name"
                             class="flex-1"
                         />
+
+                        <flux:input
+                            placeholder="Tag"
+                            wire:model.defer="players.{{ $index }}.tag"
+                            class=""
+                        />
+
+
 
                         @if (!$this->isSingles && !$this->isDoubles && count($players) > 1)
                             <flux:button
