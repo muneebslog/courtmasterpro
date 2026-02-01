@@ -601,7 +601,7 @@ new class extends Component {
                             <tbody class="divide-y">
                                 @foreach ($event->rounds as $round)
                                     @foreach ($round->matches as $match)
-                                        <tr x-show="activeRoundId === {{ $round->id }}">
+                                        <tr wire:key="{{ $match->id }}" x-show="activeRoundId === {{ $round->id }}">
 
                                             <td class="px-6 py-4 text-sm font-medium">
                                                 {{ $round->short_label }} – M{{ $match->match_no }}
