@@ -277,6 +277,21 @@ new class extends Component {
         Flux::modal('assign-teams')->show();
     }
 
+    public function deleteMatch(int $matchId)
+    {
+        abort_unless($this->canManage(), 403);
+
+        $match = MatchGame::findOrFail($matchId);
+
+        // Security check: only allow delete if teams are not assigned
+        if ($match->team_a_id === null && $match->team_b_id === null) {
+            $match->delete();
+            $this->loadEvent(); // Refresh the UI
+        } else {
+            $this->addError('sync', 'Cannot delete a match that already has teams assigned.');
+        }
+    }
+
     public function assignTeams()
     {
         abort_unless($this->canManage(), 403);
@@ -467,7 +482,25 @@ new class extends Component {
                             </div>
                         </div>
                         <div class=" flex flex-col gap-4">
-                            <div class="flex gap-3">
+                            <div class="flex gap-3 flex-wrap">
+                                @if ($this->isUmpire())
+                                    @if ($match->team_a_id == null && $match->team_b_id == null)
+                                        @if ($this->canManage())
+                                            <div class="flex justify-end gap-2">
+                                                <flux:button x-show="activeRoundOrder == {{ 1 }}" size="xs"
+                                                    wire:click="openAssignTeamsModal({{ $match->id }})">
+                                                    Assign Teams
+                                                </flux:button>
+
+                                                {{-- NEW DELETE BUTTON --}}
+                                                <flux:button variant="danger" size="xs" wire:click="deleteMatch({{ $match->id }})"
+                                                    wire:confirm="Are you sure you want to delete this match?">
+                                                    Delete
+                                                </flux:button>
+                                            </div>
+                                        @endif
+                                    @endif
+                                @endif
                                 @if ($this->canManage())
 
 
@@ -537,13 +570,13 @@ new class extends Component {
                             <div x-show="viewMode === 'table'" x-transition
                                 class="flex bg-white border border-[#E5E7EB] p-1 rounded-lg">
                                 @foreach ($event->rounds as $round)
-                                                    <button {{-- COMBINE THE CLICKS HERE --}}
-                                                        @click="activeRoundId = {{ $round->id }}; activeRoundOrder = {{ $round->order_no }}"
-                                                        class="px-3 py-1.5 text-xs font-medium rounded-md transition" :class="activeRoundId === {{ $round->id }} 
-                                    ? 'bg-[#2563EB] text-white' 
-                                    : 'text-[#6B7280] hover:text-[#111827]'">
-                                                        {{ $round->short_name ?? Str::upper(Str::slug($round->name, '')) }}
-                                                    </button>
+                                    <button {{-- COMBINE THE CLICKS HERE --}}
+                                        @click="activeRoundId = {{ $round->id }}; activeRoundOrder = {{ $round->order_no }}"
+                                        class="px-3 py-1.5 text-xs font-medium rounded-md transition" :class="activeRoundId === {{ $round->id }} 
+                                            ? 'bg-[#2563EB] text-white' 
+                                            : 'text-[#6B7280] hover:text-[#111827]'">
+                                        {{ $round->short_name ?? Str::upper(Str::slug($round->name, '')) }}
+                                    </button>
                                 @endforeach
                             </div>
 
@@ -651,7 +684,7 @@ new class extends Component {
                                             <td class="px-6 py-4">
                                                 <span
                                                     class="px-2 py-1 text-[10px] font-bold rounded
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    {{ $match->status === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
                                                     {{ strtoupper($match->status) }}
                                                 </span>
                                             </td>
