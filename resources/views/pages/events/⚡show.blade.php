@@ -499,7 +499,6 @@ new class extends Component {
                                                 </flux:button>
                                             </div>
                                         @endif
-                                    @endif
                                 @endif
                                 @if ($this->canManage())
 
