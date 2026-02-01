@@ -682,6 +682,14 @@ new class extends Component {
                                                                 wire:click="openAssignTeamsModal({{ $match->id }})">
                                                                 Assign Teams
                                                             </flux:button>
+                                                            {{-- NEW DELETE BUTTON --}}
+                    <flux:button 
+                        variant="danger" 
+                        size="xs" 
+                        wire:click="deleteMatch({{ $match->id }})"
+                        wire:confirm="Are you sure you want to delete this match?">
+                        Delete
+                    </flux:button>
                                                         @endif
                                                     @else
                                                         @if ($this->canManage())
