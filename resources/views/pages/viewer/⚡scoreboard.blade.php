@@ -43,7 +43,7 @@ new #[Layout('layouts::publicview')]
 }; ?>
 
 
-<div 
+<div
     style="margin:0;padding:0;box-sizing:border-box;background:#000;font-family:'Arial Black',Arial,sans-serif;overflow:hidden;">
 
     <div id="scoreboard-container" style="
@@ -161,14 +161,14 @@ new #[Layout('layouts::publicview')]
 
                         @foreach($visibleSets as $set)
                                             <div style="
-                                                                        {{ $loop->last
+                                                                                            {{ $loop->last
                             ? 'background:linear-gradient(135deg,#d50000 0%,#8b0000 100%);color:#fff;font-size:15vh;min-width:9vw;'
                             : 'background:#333;color:#aaa;font-size:10vh;min-width:6vw;border:2px solid #444;' }}
-                                                                        border-radius:1vh;
-                                                                        font-weight:900;
-                                                                        text-align:center;
-                                                                        padding:0 10px;
-                                                                    ">
+                                                                                            border-radius:1vh;
+                                                                                            font-weight:900;
+                                                                                            text-align:center;
+                                                                                            padding:0 10px;
+                                                                                        ">
                                                 {{ $set->getPointsForTeam($match->team_a_id) }}
                                             </div>
                         @endforeach
@@ -224,14 +224,14 @@ new #[Layout('layouts::publicview')]
 
                         @foreach($visibleSets as $set)
                                             <div style="
-                                                                        {{ $loop->last
+                                                                                            {{ $loop->last
                             ? 'background:linear-gradient(135deg,#d50000 0%,#8b0000 100%);color:#fff;font-size:15vh;min-width:9vw;'
                             : 'background:#333;color:#aaa;font-size:10vh;min-width:6vw;border:2px solid #444;' }}
-                                                                        border-radius:1vh;
-                                                                        font-weight:900;
-                                                                        text-align:center;
-                                                                        padding:0 10px;
-                                                                    ">
+                                                                                            border-radius:1vh;
+                                                                                            font-weight:900;
+                                                                                            text-align:center;
+                                                                                            padding:0 10px;
+                                                                                        ">
                                                 {{ $set->getPointsForTeam($match->team_b_id) }}
                                             </div>
                         @endforeach
@@ -259,35 +259,15 @@ new #[Layout('layouts::publicview')]
             cursor:pointer;
             opacity:0.5;
         ">⛶</button>
-      
+
 
 
     </div>
 
-  <script>
-            (function () {
-                function refreshScoreboard() {
-                    fetch(window.location.href, {
-                        cache: "no-store"
-                    })
-                        .then(r => r.text())
-                        .then(html => {
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(html, "text/html");
+    <script>
+        setTimeout(() => {
+            location.reload(true);
+        }, 1000);
+    </script>
 
-                            const newContent = doc.querySelector('#scoreboard-container');
-                            const current = document.querySelector('#scoreboard-container');
-
-                            if (newContent && current) {
-                                current.innerHTML = newContent.innerHTML;
-                            }
-                        })
-                        .catch(() => {
-                            // Android TV sometimes throws silent fetch errors — ignore
-                        });
-                }
-
-                setInterval(refreshScoreboard, 1000);
-            })();
-        </script>
 </div>
