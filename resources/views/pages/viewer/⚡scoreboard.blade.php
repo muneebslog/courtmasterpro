@@ -4,8 +4,8 @@ use Livewire\Component;
 use App\Models\MatchGame;
 use Livewire\Attributes\Layout;
 
-new #[Layout('layouts::publicview')] 
-class extends Component {
+new #[Layout('layouts::publicview')]
+    class extends Component {
     public $matchId;
 
     public function mount($match)
@@ -20,7 +20,7 @@ class extends Component {
 
         $allSets = $match->sets->sortBy('set_number');
         $latestSet = $allSets->last();
-        
+
         // Determine current Visual Match (1-5) based on set number
         $currentVisualMatchNum = $latestSet ? ceil($latestSet->set_number / 3) : 1;
 
@@ -28,7 +28,7 @@ class extends Component {
         $startSet = ($currentVisualMatchNum - 1) * 3 + 1;
         $endSet = $currentVisualMatchNum * 3;
 
-        $visibleSets = $allSets->filter(function($set) use ($startSet, $endSet) {
+        $visibleSets = $allSets->filter(function ($set) use ($startSet, $endSet) {
             return $set->set_number >= $startSet && $set->set_number <= $endSet;
         });
 
@@ -42,81 +42,9 @@ class extends Component {
     }
 }; ?>
 
-{{-- <div wire:poll.1s>
-    <style>
-        /* Previous styles preserved */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000; font-family: 'Arial Black', Arial, sans-serif; overflow: hidden; }
-        .scoreboard-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; padding: 2vh 2vw; gap: 2vh; background: #000; }
-        .footer { background: #fff; border: 0.5vh solid #000; border-radius: 1.5vh; padding: 2vh 3vw; height: 12vh; display: flex; align-items: center; justify-content: space-between; }
-        .footer-title { font-size: 3vh; font-weight: 900; color: #000; text-transform: uppercase; letter-spacing: 0.2vw; }
-        .footer-logo { height: 60px; }
-        .scoreboard { flex: 1; border: 0.5vh solid #000; border-radius: 1.5vh; display: flex; flex-direction: column; gap: 2vh; background: #000; padding: 2vh; }
-        .teams-container { flex: 1; display: flex; flex-direction: column; gap: 2vh; }
-        .team-row { flex: 1; background: linear-gradient(to right, #2a2a2a 0%, #1a1a1a 100%); border: 0.4vh solid #444; border-radius: 1.5vh; display: flex; align-items: center; padding: 0 3vw; }
-        .team-logo { width: 10vh; height: 10vh; border-radius: 1vh; margin-right: 2vw; display: flex; align-items: center; justify-content: center; font-size: 5vh; }
-        .logo-team1 { background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%); }
-        .logo-team2 { background: linear-gradient(135deg, #ff3d00 0%, #d50000 100%); }
-        .team-name { color: #fff; font-size: 8vh; font-weight: 900; letter-spacing: 0.2vw; text-transform: uppercase; flex: 1; }
-        .scores { display: flex; gap: 1vw; align-items: center; }
-        .wins-indicator { background: linear-gradient(135deg, #ffd700 0%, #ffa000 100%); color: #000; padding: 1vh 1vw; border-radius: 1vh; font-size: 6vh; font-weight: 900; min-width: 6vw; text-align: center; }
-        .round-score { background: #333; color: #aaa; border-radius: 1vh; font-size: 10vh; font-weight: 900; min-width: 6vw; text-align: center; padding: 0 10px; border: 2px solid #444; }
-        .current-score { background: linear-gradient(135deg, #d50000 0%, #8b0000 100%); color: #fff; border-radius: 1vh; font-size: 15vh; font-weight: 900; min-width: 9vw; text-align: center; }
-        
-        /* New Back Button & Control Styles */
-        .back-btn { position: fixed; top: 10px; right: 10px; padding: 10px 15px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: #fff; text-decoration: none; font-size: 1.5vh; cursor: pointer; transition: background 0.3s; z-index: 100; }
-        .back-btn:hover { background: rgba(255, 255, 255, 0.3); }
-        .fullscreen-btn { position: fixed; bottom: 10px; right: 10px; width: 45px; height: 45px; border-radius: 50%; background: #ff1744; border: 2px solid #fff; color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.5; transition: opacity 0.3s; }
-        .fullscreen-btn:hover { opacity: 1; }
-    </style>
 
-    <div class="scoreboard-container">
-        <button onclick="window.history.back()" class="back-btn">← BACK</button>
-
-        <div class="footer">
-            <div class="footer-title">
-                {{ $match->round->event->name }}
-                @if($match->round->event->default_discipline === 'mixed')
-                    - MATCH {{ $currentVisualMatchNum }} OF 5
-                @endif
-            </div>
-            <img src="{{ asset('img/sponser.jpeg') }}" class="footer-logo" alt="Sponsor">
-        </div>
-
-        <div class="scoreboard">
-            <div class="teams-container">
-                <div class="team-row">
-                    <div class="team-logo logo-team1">🏸</div>
-                    <div class="team-name">{{ $match->teamA->display_name }}</div>
-                    <div class="scores">
-                        <div class="wins-indicator">{{ $winsA }}</div>
-                        @foreach($visibleSets as $set)
-                            <div class="{{ $loop->last ? 'current-score' : 'round-score' }}">
-                                {{ $set->getPointsForTeam($match->team_a_id) }}
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-
-                <div class="team-row">
-                    <div class="team-logo logo-team2">🏸</div>
-                    <div class="team-name">{{ $match->teamB->display_name }}</div>
-                    <div class="scores">
-                        <div class="wins-indicator">{{ $winsB }}</div>
-                        @foreach($visibleSets as $set)
-                            <div class="{{ $loop->last ? 'current-score' : 'round-score' }}">
-                                {{ $set->getPointsForTeam($match->team_b_id) }}
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <button onclick="document.documentElement.requestFullscreen()" class="fullscreen-btn">⛶</button>
-    </div>
-</div> --}}
-<div wire:poll.1s style="margin:0;padding:0;box-sizing:border-box;background:#000;font-family:'Arial Black',Arial,sans-serif;overflow:hidden;">
+<div
+    style="margin:0;padding:0;box-sizing:border-box;background:#000;font-family:'Arial Black',Arial,sans-serif;overflow:hidden;">
 
     <div style="
         width:100vw;
@@ -167,8 +95,7 @@ class extends Component {
                 @endif
             </div>
 
-            <img src="{{ asset('img/sponser.jpeg') }}" alt="Sponsor"
-                 style="height:60px;">
+            <img src="{{ asset('img/sponser.jpeg') }}" alt="Sponsor" style="height:60px;">
         </div>
 
         <!-- SCOREBOARD -->
@@ -233,17 +160,17 @@ class extends Component {
                         </div>
 
                         @foreach($visibleSets as $set)
-                            <div style="
-                                {{ $loop->last
-                                    ? 'background:linear-gradient(135deg,#d50000 0%,#8b0000 100%);color:#fff;font-size:15vh;min-width:9vw;'
-                                    : 'background:#333;color:#aaa;font-size:10vh;min-width:6vw;border:2px solid #444;' }}
-                                border-radius:1vh;
-                                font-weight:900;
-                                text-align:center;
-                                padding:0 10px;
-                            ">
-                                {{ $set->getPointsForTeam($match->team_a_id) }}
-                            </div>
+                                            <div style="
+                                                    {{ $loop->last
+                            ? 'background:linear-gradient(135deg,#d50000 0%,#8b0000 100%);color:#fff;font-size:15vh;min-width:9vw;'
+                            : 'background:#333;color:#aaa;font-size:10vh;min-width:6vw;border:2px solid #444;' }}
+                                                    border-radius:1vh;
+                                                    font-weight:900;
+                                                    text-align:center;
+                                                    padding:0 10px;
+                                                ">
+                                                {{ $set->getPointsForTeam($match->team_a_id) }}
+                                            </div>
                         @endforeach
                     </div>
                 </div>
@@ -296,17 +223,17 @@ class extends Component {
                         </div>
 
                         @foreach($visibleSets as $set)
-                            <div style="
-                                {{ $loop->last
-                                    ? 'background:linear-gradient(135deg,#d50000 0%,#8b0000 100%);color:#fff;font-size:15vh;min-width:9vw;'
-                                    : 'background:#333;color:#aaa;font-size:10vh;min-width:6vw;border:2px solid #444;' }}
-                                border-radius:1vh;
-                                font-weight:900;
-                                text-align:center;
-                                padding:0 10px;
-                            ">
-                                {{ $set->getPointsForTeam($match->team_b_id) }}
-                            </div>
+                                            <div style="
+                                                    {{ $loop->last
+                            ? 'background:linear-gradient(135deg,#d50000 0%,#8b0000 100%);color:#fff;font-size:15vh;min-width:9vw;'
+                            : 'background:#333;color:#aaa;font-size:10vh;min-width:6vw;border:2px solid #444;' }}
+                                                    border-radius:1vh;
+                                                    font-weight:900;
+                                                    text-align:center;
+                                                    padding:0 10px;
+                                                ">
+                                                {{ $set->getPointsForTeam($match->team_b_id) }}
+                                            </div>
                         @endforeach
                     </div>
                 </div>
@@ -334,4 +261,11 @@ class extends Component {
         ">⛶</button>
 
     </div>
+    <script>
+        // Old-school TV-safe auto refresh
+        setTimeout(function () {
+            window.location.reload(true);
+        }, 1000); // 1 second
+    </script>
+
 </div>
