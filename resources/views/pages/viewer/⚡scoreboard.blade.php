@@ -87,7 +87,7 @@ class extends Component {
             <div class="teams-container">
                 <div class="team-row">
                     <div class="team-logo logo-team1">🏸</div>
-                    <div class="team-name">{{ $match->teamA->name }}</div>
+                    <div class="team-name">{{ $match->teamA->display_name }}</div>
                     <div class="scores">
                         <div class="wins-indicator">{{ $winsA }}</div>
                         @foreach($visibleSets as $set)
@@ -100,7 +100,7 @@ class extends Component {
 
                 <div class="team-row">
                     <div class="team-logo logo-team2">🏸</div>
-                    <div class="team-name">{{ $match->teamB->name }}</div>
+                    <div class="team-name">{{ $match->teamB->display_name }}</div>
                     <div class="scores">
                         <div class="wins-indicator">{{ $winsB }}</div>
                         @foreach($visibleSets as $set)
