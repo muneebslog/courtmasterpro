@@ -43,10 +43,10 @@ new #[Layout('layouts::publicview')]
 }; ?>
 
 
-<div id="scoreboard-container"
+<div 
     style="margin:0;padding:0;box-sizing:border-box;background:#000;font-family:'Arial Black',Arial,sans-serif;overflow:hidden;">
 
-    <div style="
+    <div id="scoreboard-container" style="
         width:100vw;
         height:100vh;
         display:flex;
@@ -259,7 +259,12 @@ new #[Layout('layouts::publicview')]
             cursor:pointer;
             opacity:0.5;
         ">⛶</button>
-        <script>
+      
+
+
+    </div>
+
+  <script>
             (function () {
                 function refreshScoreboard() {
                     fetch(window.location.href, {
@@ -285,9 +290,4 @@ new #[Layout('layouts::publicview')]
                 setInterval(refreshScoreboard, 1000);
             })();
         </script>
-
-
-    </div>
-
-
 </div>
